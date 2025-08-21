@@ -1,0 +1,56 @@
+/* Ancho responsive: móvil 100%, PC 480px */
+:root{ --page-max: 480px; }
+
+.docs-page{
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding: 1rem;
+}
+
+/* Que inputs, selects y botones ocupen 100% de su columna (col-6) */
+.docs-page .form-control,
+.docs-page .form-select,
+.docs-page .btn{
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+  box-sizing: border-box;
+  border-radius: 999px; /* estética redonda como tus botones */
+}
+
+/* Listado centrado */
+#lista-documentos{
+  display: grid;
+  grid-template-columns: 1fr;  /* 1 tarjeta por fila */
+  justify-items: center;       /* centra cada tarjeta */
+  gap: 16px;
+}
+
+/* Tarjeta centrada y limitada al ancho de la página */
+.doc-item{
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+}
+
+/* Botonera en 3 columnas */
+.doc-actions{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: center;
+  justify-items: center;
+  margin-top: 8px;
+}
+.doc-actions .btn{
+  width: 100%;
+  margin: 0;
+}
+
+/* (Limpieza de reglas antiguas que rompían el layout) */
+#lista-documentos, form {
+  /* evitamos que un CSS viejo fuerce flex column */
+  display: revert-layer;
+}

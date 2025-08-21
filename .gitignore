@@ -1,0 +1,19 @@
+# Entornos virtuales
+venv/
+.env
+
+# Archivos temporales
+__pycache__/
+*.pyc
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de VS Code
+.vscode/
+
+# Archivos específicos de tu app
+*.sqlite3
+*.log
+

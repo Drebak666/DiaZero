@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan Semanal de Ejercicio</title>
+
+<!-- Iconos opcionales -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+<!-- Tipografías góticas -->
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+/* ======= Tema gótico oscuro + layout 480 px ======= */
+:root{
+  --page-max: 480px;                /* ← ancho máx en PC */
+  --bg: #0b0c10;                    /* fondo base */
+  --panel: #0f1117;                 /* paneles */
+  --panel-2:#0a0c12;                /* subpanel / inputs */
+  --line: #1d2230;                  /* borde sutil */
+  --txt: #e6e7ee;                   /* texto */
+  --muted: #aab2c0;                 /* secundario */
+  --accent: #b91c1c;                /* rojo sangre */
+  --accent-2:#6d28d9;               /* púrpura */
+  --good:#22c55e;
+  --shadow: 0 16px 40px rgba(0,0,0,.55);
+  --glow: 0 0 0 2px rgba(185,28,28,.3), 0 0 20px rgba(185,28,28,.18);
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+body{
+  margin:0; color:var(--txt); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background:
+    radial-gradient(1200px 700px at -20% -10%, rgba(185,28,28,.06), transparent 60%),
+    radial-gradient(900px 600px at 120% 0%, rgba(109,40,217,.06), transparent 60%),
+    linear-gradient(180deg,#0b0c10, #0b0c10);
+  padding: 16px;
+}
+
+/* Contenedor centrado */
+.app{
+  width:100%; max-width:var(--page-max); margin-inline:auto;
+}
+
+/* Paneles */
+.card{
+  background:var(--panel); border:1px solid var(--line); border-radius:16px;
+  padding:16px; box-shadow: var(--shadow);
+}
+.card + .card{ margin-top:18px; }
+
+/* Títulos góticos */
+h1,h2{ font-family: Cinzel, serif; letter-spacing:.3px; margin:0 0 10px; }
+h1{
+  text-align:center; font-weight:800; font-size:1.6rem;
+  text-shadow:0 0 12px rgba(185,28,28,.15);
+}
+.section-title{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:8px; margin-bottom:8px;
+}
+
+/* Chips de días */
+.days{
+  display:grid; grid-template-columns: repeat(7, 1fr); gap:6px;
+}
+.day{
+  user-select:none; text-align:center; padding:.55rem .4rem; border-radius:10px;
+  background:var(--panel-2); border:1px solid var(--line); color:var(--muted);
+  cursor:pointer; transition: filter .15s, transform .05s, box-shadow .2s;
+}
+.day:hover{ filter:brightness(1.05); transform: translateY(-1px); }
+.day.active{ color:#fff; border-color:rgba(185,28,28,.5); box-shadow: var(--glow); }
+
+/* Filtros */
+.filters{ display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 2px; }
+.select, .input, .textarea{
+  width:100%; padding:.65rem .7rem; background:var(--panel-2); color:var(--txt);
+  border:1px solid var(--line); border-radius:12px; outline:none;
+}
+.select:focus, .input:focus, .textarea:focus{ box-shadow: var(--glow); border-color: rgba(185,28,28,.5); }
+label{ color:var(--muted); font-size:.9rem; }
+
+/* Formulario */
+.form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.form-grid .full{ grid-column: 1 / -1; }
+
+/* Botones */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:.4rem;
+  border:none; border-radius:999px; padding:.7rem 1rem; cursor:pointer;
+  background:#1a1f2b; color:#e7eaf5; transition: transform .05s, filter .15s, box-shadow .2s;
+}
+.btn:hover{ filter:brightness(1.06); transform: translateY(-1px); }
+.btn:active{ transform: translateY(0); }
+.btn-primary{ background: linear-gradient(180deg, #d81e1e, #a11414); box-shadow: var(--glow); }
+.btn-ghost{ background:transparent; border:1px solid var(--line); color:var(--muted); }
+.btn-good{ background: linear-gradient(180deg,#25d26c,#199e4f); color:#07150e; }
+.btn-purple{ background: linear-gradient(180deg,#7b3fe3,#5a2bb3); }
+
+/* Lista del día */
+.list{ display:flex; flex-direction:column; gap:10px; }
+.item{
+  position:relative; background:var(--panel-2); border:1px solid var(--line); border-radius:12px; padding:12px;
+}
+.item::before{
+  content:""; position:absolute; left:-1px; top:-1px; bottom:-1px; width:4px; border-radius:12px 0 0 12px;
+  background: linear-gradient(180deg, var(--accent), #510b0b);
+}
+.item-title{ font-weight:600; display:flex; align-items:center; gap:.5rem; }
+.item-meta{ color:var(--muted); font-size:.9rem; margin-top:2px; }
+.item-actions{ display:flex; gap:8px; margin-top:8px; }
+
+/* Checkbox de días del formulario */
+.days-check{
+  display:grid; grid-template-columns: repeat(7, 1fr); gap:6px;
+}
+.days-check label{
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  border:1px solid var(--line); border-radius:10px; padding:.45rem .3rem; background:var(--panel-2);
+}
+.days-check input{ accent-color: var(--accent); }
+
+/* Sombra de foco al hacer scroll al formulario */
+.pulse-highlight{ animation: formPulse 1.2s ease-out 1; }
+@keyframes formPulse{
+  0%{ box-shadow:none; } 35%{ box-shadow: var(--glow); } 100%{ box-shadow:none; }
+}
+
+/* Etiquetitas */
+.badge{
+  display:inline-block; padding:.2rem .5rem; border-radius:999px;
+  border:1px solid var(--line); color:#cbd5e1; background:#0c0f15; font-size:.75rem;
+}
+
+/* Responsive */
+@media (max-width:500px){
+  .form-grid{ grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- Cabecera -->
+    <div class="card">
+      <h1>Plan Semanal de Ejercicio</h1>
+      <div class="filters">
+        <select id="filterPlace" class="select">
+          <option value="all">Todos (Gym + Casa)</option>
+          <option value="gym">Solo Gym</option>
+          <option value="home">Solo Casa</option>
+        </select>
+        <span class="badge" id="summaryBadge">0 rutinas esta semana</span>
+      </div>
+      <!-- Selector de día activo -->
+      <div id="daySelector" class="days" aria-label="Días de la semana"></div>
+    </div>
+
+    <!-- Formulario -->
+    <div class="card" id="formCard">
+      <div class="section-title"><h2>Nueva rutina</h2></div>
+      <form id="workoutForm">
+        <div class="form-grid">
+          <div>
+            <label>Nombre</label>
+            <input id="name" class="input" placeholder="p. ej., Pecho + Tríceps" required>
+          </div>
+          <div>
+            <label>Lugar</label>
+            <select id="place" class="select">
+              <option value="gym">Gimnasio</option>
+              <option value="home">En casa</option>
+            </select>
+          </div>
+          <div>
+            <label>Hora</label>
+            <input id="time" type="time" class="input">
+          </div>
+          <div>
+            <label>Duración (min)</label>
+            <input id="duration" type="number" min="10" step="5" class="input" placeholder="45">
+          </div>
+
+          <div class="full">
+            <label>Días</label>
+            <div class="days-check" id="daysCheck"></div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button type="button" class="btn btn-ghost" id="btnAll">Todos</button>
+              <button type="button" class="btn btn-ghost" id="btnWeek">Laborables</button>
+              <button type="button" class="btn btn-ghost" id="btnWeekend">Fin de semana</button>
+            </div>
+          </div>
+
+          <div class="full">
+            <label>Notas (opcional)</label>
+            <textarea id="notes" rows="3" class="textarea" placeholder="Series, repeticiones, recordatorios..."></textarea>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+          <button class="btn btn-purple" type="button" id="btnCancel" style="display:none"><i class="fa-regular fa-circle-xmark"></i> Cancelar edición</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Lista del día -->
+    <div class="card">
+      <div class="section-title">
+        <h2 id="dayTitle">Lunes</h2>
+      </div>
+      <div id="list" class="list"></div>
+    </div>
+
+  </div>
+
+<script>
+/* ====== Utilidades y estado ====== */
+const LS_KEY = "fit.routines.v1";
+const DAYS = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+let activeDay = 0;          // 0=Lunes … 6=Domingo
+let editingId = null;       // rutina que estamos editando
+
+const daySelector = document.getElementById('daySelector');
+const dayTitle    = document.getElementById('dayTitle');
+const listEl      = document.getElementById('list');
+const badge       = document.getElementById('summaryBadge');
+const filterPlace = document.getElementById('filterPlace');
+
+const formCard    = document.getElementById('formCard');
+const form        = document.getElementById('workoutForm');
+const nameEl      = document.getElementById('name');
+const placeEl     = document.getElementById('place');
+const timeEl      = document.getElementById('time');
+const durationEl  = document.getElementById('duration');
+const notesEl     = document.getElementById('notes');
+const daysCheck   = document.getElementById('daysCheck');
+const btnCancel   = document.getElementById('btnCancel');
+
+function save(data){ localStorage.setItem(LS_KEY, JSON.stringify(data)); }
+function load(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)) || []; }catch{ return []; } }
+
+/* Seed demo si está vacío */
+if(load().length === 0){
+  save([
+    {id:crypto.randomUUID(), name:"Pecho + Tríceps", place:"gym", time:"18:30", duration:55, notes:"Press banca 4×8, aperturas 3×12, fondos 3×AMRAP", days:[0,3]},
+    {id:crypto.randomUUID(), name:"HIIT 20' + Core", place:"home", time:"08:00", duration:30, notes:"Tabata 8 rondas, plancha 3×45s", days:[1,5]}
+  ]);
+}
+
+/* ====== UI: construir chips de días y checks ====== */
+function buildDaySelector(){
+  daySelector.innerHTML = "";
+  for(let i=0;i<7;i++){
+    const d = document.createElement('button');
+    d.type="button"; d.className = "day"+(i===activeDay?" active":"");
+    d.textContent = DAYS[i][0]; // inicial
+    d.title = DAYS[i];
+    d.addEventListener('click', ()=>{ activeDay=i; updateView(); syncDaysChecksToActive(); });
+    daySelector.appendChild(d);
+  }
+}
+function buildDaysChecks(){
+  daysCheck.innerHTML = "";
+  for(let i=0;i<7;i++){
+    const wrap = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type="checkbox"; cb.value = String(i); cb.name="days";
+    wrap.append(cb, document.createTextNode(DAYS[i][0]));
+    daysCheck.appendChild(wrap);
+  }
+}
+function syncDaysChecksToActive(){
+  daysCheck.querySelectorAll('input[type="checkbox"]').forEach((cb,idx)=>{
+    cb.checked = (idx===activeDay);
+  });
+}
+
+/* ====== Render ====== */
+function updateSummary(){
+  const all = load();
+  badge.textContent = `${all.length} rutinas esta semana`;
+}
+function updateView(){
+  document.querySelectorAll('.day').forEach((el,idx)=> el.classList.toggle('active', idx===activeDay));
+  dayTitle.textContent = DAYS[activeDay];
+
+  const all = load();
+  const filter = filterPlace.value; // all/gym/home
+
+  const todays = all.filter(r => r.days?.includes(activeDay))
+                    .filter(r => filter==='all' ? true : r.place === filter);
+
+  listEl.innerHTML = todays.length? "" : `<div class="item"><div class="item-meta">No hay rutinas este día.</div></div>`;
+
+  todays.forEach(r => listEl.appendChild(renderItem(r)));
+  updateSummary();
+}
+
+function renderItem(r){
+  const div = document.createElement('div');
+  div.className = "item";
+  const placeIcon = r.place==="gym" ? '<i class="fa-solid fa-dumbbell"></i>' : '<i class="fa-solid fa-house"></i>';
+  div.innerHTML = `
+    <div class="item-title">${placeIcon} ${r.name}</div>
+    <div class="item-meta">
+      ${r.time ? `<span class="badge"><i class="fa-regular fa-clock"></i> ${r.time}</span>` : ""}
+      ${r.duration ? `<span class="badge"><i class="fa-regular fa-hourglass-half"></i> ${r.duration} min</span>` : ""}
+      ${r.place ? `<span class="badge">${r.place==="gym"?"Gym":"Casa"}</span>` : ""}
+    </div>
+    ${r.notes? `<div style="margin-top:6px; color:var(--muted)">${r.notes}</div>`:""}
+    <div class="item-actions">
+      <button class="btn btn-ghost" data-act="edit"><i class="fa-regular fa-pen-to-square"></i> Editar</button>
+      <button class="btn btn-ghost" data-act="del"><i class="fa-regular fa-trash-can"></i> Borrar</button>
+    </div>
+  `;
+  div.querySelector('[data-act="edit"]').addEventListener('click', ()=> startEdit(r));
+  div.querySelector('[data-act="del"]').addEventListener('click', ()=> removeItem(r.id));
+  return div;
+}
+
+/* ====== CRUD ====== */
+function getFormDays(){
+  return Array.from(daysCheck.querySelectorAll('input[type="checkbox"]:checked'))
+              .map(cb => parseInt(cb.value,10))
+              .sort((a,b)=>a-b);
+}
+function clearForm(){
+  form.reset();
+  editingId = null;
+  btnCancel.style.display = "none";
+  syncDaysChecksToActive();
+}
+function startEdit(r){
+  editingId = r.id;
+  nameEl.value = r.name;
+  placeEl.value = r.place;
+  timeEl.value = r.time || "";
+  durationEl.value = r.duration || "";
+  notesEl.value = r.notes || "";
+  daysCheck.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+    cb.checked = r.days.includes(parseInt(cb.value,10));
+  });
+  btnCancel.style.display = "inline-flex";
+  // Scroll suave al formulario con pequeño destello
+  const y = formCard.getBoundingClientRect().top + window.pageYOffset - 84;
+  window.scrollTo({ top:y, behavior:'smooth' });
+  formCard.classList.add('pulse-highlight');
+  setTimeout(()=> formCard.classList.remove('pulse-highlight'), 1200);
+}
+function removeItem(id){
+  if(!confirm("¿Borrar esta rutina?")) return;
+  const all = load().filter(r => r.id !== id);
+  save(all); updateView();
+}
+
+form.addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const data = {
+    name: nameEl.value.trim(),
+    place: placeEl.value,
+    time: timeEl.value || null,
+    duration: durationEl.value ? parseInt(durationEl.value,10) : null,
+    notes: notesEl.value.trim() || null,
+    days: getFormDays()
+  };
+  if(!data.name || data.days.length===0){ alert("Pon un nombre y al menos un día."); return; }
+
+  const all = load();
+  if(editingId){
+    const idx = all.findIndex(r=>r.id===editingId);
+    if(idx>-1) all[idx] = { ...all[idx], ...data };
+  }else{
+    all.push({ id: crypto.randomUUID(), ...data });
+  }
+  save(all);
+  clearForm();
+  updateView();
+});
+
+btnCancel.addEventListener('click', ()=>{ clearForm(); });
+
+/* Accesos rápidos de días */
+document.getElementById('btnAll').addEventListener('click', ()=>{
+  daysCheck.querySelectorAll('input').forEach(cb=> cb.checked = true);
+});
+document.getElementById('btnWeek').addEventListener('click', ()=>{
+  daysCheck.querySelectorAll('input').forEach((cb,i)=> cb.checked = (i<=4));
+});
+document.getElementById('btnWeekend').addEventListener('click', ()=>{
+  daysCheck.querySelectorAll('input').forEach((cb,i)=> cb.checked = (i>=5));
+});
+
+/* Filtro Gym/Casa */
+filterPlace.addEventListener('change', updateView);
+
+/* Init */
+buildDaySelector();
+buildDaysChecks();
+syncDaysChecksToActive();
+updateView();
+</script>
+</body>
+</html>

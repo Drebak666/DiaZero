@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <link rel="icon" href="/static/favicon.png">
+
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Modo continuo</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+  <style>
+
+    /* Botón flotante de Inicio (mismo estilo que mini-clock) */
+.mini-home{
+  position: fixed;
+  bottom: 14px;
+  left: 14px;          /* esquina inferior izquierda */
+  z-index: 60;
+  width: 50px; height: 50px;
+  border-radius: 9999px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(17,24,39,.85);
+  color: #e5e7eb;
+  border: 1px solid rgba(255,255,255,.08);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+  cursor: pointer;
+}
+
+    html, body { height:100%; }
+    body { margin:0; background:#0f172a; color:#e5e7eb; }
+
+    /* Ocultamos el header del shell */
+    header { display:none; }
+
+    /* Iframe a pantalla completa */
+    .frame-wrap{
+      position: fixed;
+      inset: 0;
+    }
+    #app-frame{
+      width: 100%;
+      height: 100%;
+      display:block;
+      border:0;
+      background:#0b1220;
+    }
+
+    /* Botón flotante (discreto) */
+.mini-clock{
+  position: fixed;
+  bottom: 14px; 
+  right: 14px;         /* puedes moverlo a la izquierda si prefieres */
+  z-index: 60;
+  width: 50px; height: 50px;
+  border-radius: 9999px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(17,24,39,.85);
+  color: #e5e7eb;
+  border: 1px solid rgba(255,255,255,.08);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+  cursor: pointer;
+}
+
+
+/* Panel a pantalla completa */
+.clock-panel{
+  position: fixed; inset: 0; 
+  z-index: 70;
+  display: none;
+  align-items: center; justify-content: center;
+  background: rgba(2,6,23,.65);
+  backdrop-filter: blur(4px);
+}
+.clock-panel.show{ display: flex; }
+
+.clock-inner{
+  position: relative;
+  text-align: center;
+  padding: 28px 24px 36px;
+  background: rgba(15,23,42,.92);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  max-width: min(92vw, 720px);
+  width: 100%;
+}
+
+/* Tipografías grandes y bonitas */
+.clock-time{
+  font-size: clamp(48px, 9vw, 96px);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #fff;
+}
+.clock-date{
+  margin-top: 8px;
+  font-size: clamp(18px, 3.2vw, 28px);
+  color: #cbd5e1;
+}
+
+/* Botón de cerrar */
+.clock-close{
+  position: absolute; top: 10px; right: 10px;
+  width: 36px; height: 36px; border-radius: 9999px;
+  background: rgba(30,41,59,.85);
+  color: #e5e7eb; border: 1px solid rgba(255,255,255,.08);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; cursor: pointer;
+}
+
+
+    /* Mini-player */
+    .mini-player{
+      position: fixed; top: 10px; right: 12px; z-index: 50;
+      display: none; align-items: center; gap: 8px;
+      background: rgba(17,24,39,.85);
+      border: 1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(6px);
+      box-shadow: 0 6px 20px rgba(0,0,0,.35);
+      padding: 6px 10px; border-radius: 9999px; opacity: .98;
+    }
+    .mini-player.show{ display:flex; }
+    .mp-btn{ width:32px; height:32px; border-radius:9999px; display:flex; align-items:center; justify-content:center; }
+    .mini-title{ max-width: 42vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  </style>
+
+  <!-- Cargar OneSignal lo antes posible -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(async function (OneSignal) {
+      await OneSignal.init({
+        appId: "763d5d14-441f-4d1c-b7bd-85ed57fa6f85",
+        serviceWorkerPath: "/OneSignalSDKWorker.js",
+        serviceWorkerParam: { scope: "/" }
+      });
+    });
+  </script>
+</head>
+<body>
+
+  <!-- Mini-reproductor flotante -->
+  <div id="mini-player" class="mini-player" title="Mini reproductor">
+    <button id="mini-prev" class="mp-btn bg-gray-600 hover:bg-gray-500 text-white" title="Anterior">
+      <i class="fa-solid fa-backward-step"></i>
+    </button>
+    <button id="mini-play" class="mp-btn bg-purple-500 hover:bg-purple-600 text-white" title="Reproducir / Pausar">
+      <i class="fa-solid fa-play"></i>
+    </button>
+    <button id="mini-next" class="mp-btn bg-gray-600 hover:bg-gray-500 text-white" title="Siguiente">
+      <i class="fa-solid fa-forward-step"></i>
+    </button>
+    <span id="mini-title" class="mini-title">—</span>
+    <button id="mini-hide" class="mp-btn bg-gray-700 hover:bg-gray-600 text-white" title="Ocultar">×</button>
+  </div>
+
+  <!-- Botón flotante de reloj -->
+<button id="mini-clock" class="mini-clock" title="Ver hora y fecha">
+  <i class="fa-solid fa-clock"></i>
+</button>
+<!-- Botón flotante de inicio -->
+<button id="mini-home" class="mini-home" title="Ir al inicio">
+  <i class="fa-solid fa-house"></i>
+</button>
+
+
+<!-- Panel desplegable de reloj -->
+<div id="clock-panel" class="clock-panel" aria-hidden="true">
+  <div class="clock-inner">
+    <div id="clock-time" class="clock-time">18:35</div>
+    <div id="clock-date" class="clock-date">Jueves, 14 de agosto</div>
+    <button id="clock-close" class="clock-close" title="Cerrar">×</button>
+  </div>
+</div>
+
+
+  <!-- Contenido dentro del iframe -->
+  <div class="frame-wrap">
+    <iframe id="app-frame" src="/?plain=1" title="Contenido"></iframe>
+  </div>
+
+  <!-- JS -->
+  <script src="{{ url_for('static', filename='js/supabaseClient.js') }}" type="module"></script>
+  <script src="{{ url_for('static', filename='js/player-shell.js') }}" type="module"></script>
+  <script src="{{ url_for('static', filename='js/shell-router.js') }}" type="module"></script>
+
+  <!-- Lógica que necesita Supabase y OneSignal -->
+  <script type="module">
+    import { supabase } from "{{ url_for('static', filename='js/supabaseClient.js') }}";
+
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(async function (OneSignal) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // asegura permiso + suscripción y vincula el dispositivo al UID
+      await OneSignal.Notifications.requestPermission();
+      await OneSignal.User.PushSubscription.optIn();
+      await OneSignal.login(user.id);
+
+      console.log("OneSignal linked:", user.id,
+        "subId:", await OneSignal.User.PushSubscription.id);
+    });
+  </script>
+
+  <script>
+  // ——— Reloj desplegable ———
+  (function(){
+    const btn   = document.getElementById('mini-clock');
+    const panel = document.getElementById('clock-panel');
+    const close = document.getElementById('clock-close');
+    const elTime = document.getElementById('clock-time');
+    const elDate = document.getElementById('clock-date');
+
+    function updateClock(){
+      const now = new Date();
+
+      // Hora HH:mm en 24h (es-ES)
+      const time = new Intl.DateTimeFormat('es-ES', {
+        hour: '2-digit', minute: '2-digit', hour12: false
+      }).format(now);
+
+      // Fecha “Jueves, 14 de agosto”
+      const date = new Intl.DateTimeFormat('es-ES', {
+        weekday: 'long', day: '2-digit', month: 'long'
+      }).format(now);
+
+      elTime.textContent = time;
+      // Capitalizar la primera letra del día/mes si hace falta
+      elDate.textContent = date.charAt(0).toUpperCase() + date.slice(1);
+    }
+
+    let t = null;
+    function openClock(){
+      updateClock();
+      if (!t) t = setInterval(updateClock, 1000);
+      panel.classList.add('show');
+      panel.setAttribute('aria-hidden', 'false');
+    }
+    function closeClock(){
+      panel.classList.remove('show');
+      panel.setAttribute('aria-hidden', 'true');
+      if (t){ clearInterval(t); t = null; }
+    }
+
+    btn?.addEventListener('click', openClock);
+    close?.addEventListener('click', closeClock);
+    panel?.addEventListener('click', (e)=>{ if (e.target === panel) closeClock(); });
+    document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeClock(); });
+  })();
+</script>
+<script>
+  // ——— Botón "Inicio" ———
+  (function(){
+    const btnHome = document.getElementById('mini-home');
+    const frame   = document.getElementById('app-frame');
+
+    btnHome?.addEventListener('click', () => {
+      // Si estamos usando el shell con iframe, recarga el inicio dentro del iframe
+      if (frame) {
+        // cambia aquí si tu “inicio” es otro path
+        const homeUrl = frame.dataset.home || '/?plain=1';
+        frame.src = homeUrl;
+      } else {
+        // Fallback: navega toda la página
+        window.location.href = '/';
+      }
+    });
+  })();
+</script>
+
+
+</body>
+</html>

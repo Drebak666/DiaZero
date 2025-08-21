@@ -1,0 +1,346 @@
+body {
+  background-color: #0f0f1a;
+  color: #f0f0f0;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
+  box-sizing: border-box;
+  /* Añadir un sutil gradiente al fondo del cuerpo para más profundidad */
+  background-image: radial-gradient(circle at top left, #1a1a30 0%, #0f0f1a 70%);
+}
+
+.contenedor-principal {
+  background-color: #1b1b2f;
+  border-radius: 16px;
+  padding: 2rem;
+  /* Sombra más pronunciada y con un ligero brillo */
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 0, 0, 0.2), inset 0 0 5px rgba(255, 255, 255, 0.05);
+  max-width: 860px;
+  width: 100%;
+  box-sizing: border-box;
+  /* Gradiente sutil para el contenedor principal */
+  background: linear-gradient(135deg, #1b1b2f 0%, #252540 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05); /* Borde muy sutil */
+}
+
+.controles-calendario {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 3.5rem; /* Aumentado para dar más espacio entre la fecha y los días */
+}
+
+select, button {
+  background-color: #2e2e4d;
+  color: #f0f0f0;
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  /* Transiciones más suaves para un efecto premium */
+  transition: background 0.3s ease, border-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+  /* Gradiente para los botones */
+  background: linear-gradient(180deg, #2e2e4d 0%, #22223a 100%);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+select,
+select option {
+  background-color: #2e2e4d;
+  color: #f0f0f0;
+}
+
+select:hover, button:hover {
+  background-color: #3c3c5c;
+  border-color: #666;
+  transform: translateY(-3px); /* Efecto de elevación más pronunciado */
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5); /* Sombra más grande al pasar el ratón */
+  /* Gradiente de hover */
+  background: linear-gradient(180deg, #3c3c5c 0%, #2e2e4d 100%);
+}
+
+#calendario-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.7rem;
+}
+
+.nombres-dias-semana {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  color: #aaaaaa;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0;
+  font-size: 0.95rem; /* Ligeramente más grande */
+  letter-spacing: 0.05em; /* Espaciado entre letras */
+}
+
+.dia-calendario {
+  background-color: #222240;
+  color: #e0e0e0;
+  padding: 1rem 0;
+  border-radius: 12px;
+  text-align: center;
+  position: relative;
+  cursor: pointer;
+  /* Sombra más definida y gradiente para los días */
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4), inset 0 0 3px rgba(255, 255, 255, 0.02);
+  background: linear-gradient(180deg, #222240 0%, #1a1a30 100%);
+  /* Transición mejorada para el efecto de escala y fondo */
+  transition: background 0.3s ease, transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+}
+
+.dia-calendario:hover {
+  background-color: #2e2e5e;
+  transform: scale(1.08); /* Efecto de escala más pronunciado */
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.6); /* Sombra más grande al pasar el ratón */
+  background: linear-gradient(180deg, #2e2e5e 0%, #222240 100%);
+}
+
+.dia-actual {
+  border: 2px solid #ffd54f;
+  background-color: #333355;
+  color: #fff;
+  font-weight: bold;
+  /* Sombra con efecto de brillo más intenso */
+  box-shadow: 0 0 15px rgba(255, 213, 79, 0.6), inset 0 0 8px rgba(255, 213, 79, 0.4);
+  background: linear-gradient(180deg, #333355 0%, #2a2a45 100%);
+  transform: scale(1.05); /* Asegurar que el día actual siempre esté ligeramente escalado */
+}
+
+.dia-seleccionado {
+  border: 2px solid #29b6f6;
+  background-color: #003b6f;
+  color: #ffffff;
+  /* Sombra con efecto de brillo más intenso */
+  box-shadow: 0 0 15px rgba(41, 182, 246, 0.6), inset 0 0 8px rgba(41, 182, 246, 0.4);
+  background: linear-gradient(180deg, #003b6f 0%, #002a50 100%);
+  transform: scale(1.05); /* Asegurar que el día seleccionado siempre esté ligeramente escalado */
+}
+
+/* --- REVISIÓN DE INDICADORES DE ACTIVIDAD --- */
+
+/* Base para los indicadores (puntos) */
+.dia-calendario::before,
+.dia-calendario::after {
+  content: "";
+  border-radius: 50%;
+  position: absolute;
+  bottom: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+  display: none; /* Por defecto oculto, se mostrará con las clases específicas */
+}
+
+/* Indicador para TAREAS (Naranja) - Usamos ::before */
+.dia-tarea::before {
+  background-color: #e67e22; /* Naranja */
+  width: 5px; /* Más pequeño */
+  height: 5px; /* Más pequeño */
+  left: 50%;
+  transform: translateX(-50%);
+  display: block;
+}
+
+/* Indicador para CITAS (Azul) - Usamos ::after */
+.dia-cita::after {
+  background-color: #3498db; /* Azul */
+  width: 7px; /* Más grande para mayor visibilidad */
+  height: 7px; /* Más grande para mayor visibilidad */
+  left: 50%;
+  transform: translateX(-50%);
+  display: block;
+}
+
+/* Si un día tiene TAREA y CITA, ajustamos las posiciones para que no se superpongan */
+.dia-tarea.dia-cita::before {
+    left: 30%; /* Mueve la tarea más a la izquierda */
+    transform: translateX(-50%);
+}
+
+.dia-tarea.dia-cita::after {
+    left: 70%; /* Mueve la cita más a la derecha */
+    transform: translateX(-50%);
+}
+
+/* Eliminamos el indicador para RUTINAS */
+
+
+/* --- FIN REVISIÓN DE INDICADORES DE ACTIVIDAD --- */
+
+
+#lista-contenedor {
+  margin-top: 2rem;
+  background-color: #1e1e33;
+  border-radius: 12px;
+  padding: 1.5rem;
+  /* Sombra más suave y gradiente */
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.3), inset 0 0 5px rgba(255, 255, 255, 0.03);
+  background: linear-gradient(135deg, #1e1e33 0%, #2a2a45 100%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#lista-contenedor h3 {
+  margin: 0 0 1rem 0;
+  border-bottom: none;
+  padding-bottom: 0.5rem;
+  font-size: 1.6rem; /* Un poco más grande */
+  color: #b3e5fc;
+  font-weight: 600; /* Más audaz */
+  position: relative;
+  padding-left: 10px;
+  text-shadow: 0 0 5px rgba(41, 182, 246, 0.3); /* Sombra de texto para el título */
+}
+
+/* Línea decorativa para el título de la lista */
+#lista-contenedor h3::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 60px; /* Longitud de la línea un poco más larga */
+  height: 4px; /* Grosor de la línea más pronunciado */
+  background: linear-gradient(to right, #29b6f6, #007bff, transparent); /* Gradiente más vibrante */
+  border-radius: 2px;
+}
+
+#fecha-seleccionada {
+  color: #fdd835;
+  font-weight: bold;
+  font-size: 1.2rem; /* Más grande */
+  text-shadow: 0 0 5px rgba(253, 216, 53, 0.4); /* Sombra de texto para la fecha */
+}
+
+#lista-actividades {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0 0;
+}
+
+#lista-actividades li {
+  /* Estilos base, el color de fondo y texto se sobrescribirán por tipo */
+  border-left: 6px solid;
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.6rem;
+  font-size: 1rem;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3), inset 0 0 3px rgba(255, 255, 255, 0.02);
+  transition: transform 0.2s ease, box-shadow 0.3s ease, background 0.3s ease, color 0.3s ease; /* Añadido color a la transición */
+}
+
+#lista-actividades li:hover {
+  transform: translateX(8px); /* Desplazamiento más pronunciado */
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.5); /* Sombra más grande al pasar el ratón */
+}
+
+/* Colores de fondo y borde para los elementos de la lista de actividades */
+.tipo-TAREA {
+  border-color: #e67e22; /* Naranja para TAREAS */
+  background: linear-gradient(180deg, #e67e22 0%, #d35400 100%); /* Gradiente de fondo para TAREA */
+  color: #ffffff;
+}
+
+.tipo-TAREA:hover {
+  background: linear-gradient(180deg, #d35400 0%, #c0392b 100%);
+}
+
+.tipo-RUTINA {
+  border-color: #66bb6a;
+  background: linear-gradient(180deg, #66bb6a 0%, #4CAF50 100%); /* Gradiente de fondo para RUTINA */
+  color: #ffffff;
+}
+
+.tipo-RUTINA:hover {
+  background: linear-gradient(180deg, #4CAF50 0%, #388E3C 100%);
+}
+
+.tipo-CITA {
+  border-color: #3498db; /* Azul para CITAS */
+  background: linear-gradient(180deg, #3498db 0%, #2980b9 100%); /* Gradiente de fondo para CITA */
+  color: #ffffff;
+}
+
+.tipo-CITA:hover {
+  background: linear-gradient(180deg, #2980b9 0%, #2c3e50 100%);
+}
+
+
+/* Media queries para responsividad */
+@media (max-width: 768px) {
+  body {
+    padding: 1rem; /* Menos padding en móviles */
+  }
+
+  .contenedor-principal {
+    padding: 1rem;
+  }
+
+  .dia-calendario {
+    padding: 0.7rem 0;
+    font-size: 0.9rem;
+  }
+
+  .controles-calendario {
+    flex-direction: column;
+    gap: 0.8rem;
+    margin-bottom: 1.5rem; /* Ajuste para móviles */
+  }
+
+  select, button {
+    width: 100%;
+    padding: 0.8rem;
+  }
+
+  #lista-contenedor h3 {
+    font-size: 1.3rem;
+  }
+
+  #lista-actividades li {
+    padding: 0.7rem 0.8rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Nuevo punto de quiebre para pantallas más grandes que móviles pero más pequeñas que desktop */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .contenedor-principal {
+    padding: 1.5rem;
+  }
+
+  .dia-calendario {
+    padding: 0.8rem 0;
+  }
+}
+
+.calendario-header {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 15px; /* añade espacio entre el header y el calendario */
+}
+
+.dias-semana {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.hora {
+  font-weight: bold;
+  color: #fff176	; /* Amarillo claro */
+  font-size: 1.05rem;
+  margin-right: 4px;
+  display: inline-block;
+  min-width: 3.5em; /* Alinea las horas visualmente */
+}

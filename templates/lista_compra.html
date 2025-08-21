@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/lista_compra.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lista de la compra</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+</head>
+<body class="main-container">
+
+<section class="main-section">
+ <div class="card">
+  <h1 class="titulo">🛒 <span class="azul">Lista Compra</span></h1>
+
+  <button id="agregar-completados-despensa" class="btn-principal">
+    🧺 Pasar a despensa
+  </button>
+
+<form id="form-lista" class="formulario flex items-center gap-2">
+  <input type="text" id="nombre-item" placeholder="Ingrediente" required class="flex-grow" />
+  <button type="submit" class="btn-secundario">+</button>
+</form>
+
+
+
+
+  <hr class="separador" />
+
+<div id="comparador-precios" class="mb-4 p-4 border rounded bg-white shadow-sm">
+<div class="grid grid-cols-2 gap-4 items-end">
+  <div>
+    <label for="super1"></label>
+    <select id="super1" class="input"></select>
+    <div class="text-center font-bold mt-2" id="total-super1">0€</div>
+  </div>
+  <div>
+    <label for="super2"></label>
+    <select id="super2" class="input"></select>
+    <div class="text-center font-bold mt-2" id="total-super2">0€</div>
+  </div>
+</div>
+
+
+
+
+  <section id="lista-compra-container">
+    <p class="cargando">Cargando lista...</p>
+    <!-- Example list item - these would be dynamically loaded -->
+    <div class="flex items-center justify-between py-2 border-b border-gray-600 last:border-b-0">
+      <div class="flex items-center gap-2">
+        <input type="checkbox" class="form-checkbox h-5 w-5 text-indigo-600 rounded" />
+        <span class="text-lg">Pollo — 1000 g</span>
+      </div>
+      <div class="flex gap-2">
+        <button class="text-yellow-500 hover:text-yellow-400">✏️</button>
+        <button class="text-red-500 hover:text-red-400">🗑️</button>
+      </div>
+    </div>
+    <div class="flex items-center justify-between py-2 border-b border-gray-600 last:border-b-0">
+      <div class="flex items-center gap-2">
+        <input type="checkbox" class="form-checkbox h-5 w-5 text-indigo-600 rounded" />
+        <span class="text-lg">Leche — 1000 ml</span>
+      </div>
+      <div class="flex gap-2">
+        <button class="text-yellow-500 hover:text-yellow-400">✏️</button>
+        <button class="text-red-500 hover:text-red-400">🗑️</button>
+      </div>
+    </div>
+
+    
+  </section>
+  
+</div>
+
+<!-- Modal confirmación -->
+<div id="modal-confirmacion" class="modal">
+  <div class="modal-content">
+    <p>🧺 Los ingredientes marcados han sido pasados a la despensa.</p>
+    <button class="btn-secundario" onclick="document.getElementById('modal-confirmacion').classList.remove('show')">Cerrar</button>
+  </div>
+</div>
+
+
+<!-- Sección: Ingredientes pendientes -->
+<section class="main-section" id="ingredientes-pendientes">
+  <div class="card">
+    <h2 class="titulo">🧪 Ingredientes </h2>
+  
+    <div class="section-content" id="contenedor-ingredientes-pendientes">
+      <!-- Aquí se cargarán dinámicamente -->
+    </div>
+  </div>
+</section>
+
+</section>
+
+
+<!-- Modal: Completar ingrediente -->
+<div id="modal-completar" class="modal oculto">
+  <form id="form-completar-ingrediente" class="modal-content grid grid-cols-1 md:grid-cols-2 gap-4 p-6 bg-gray-800 rounded-lg text-white">
+    
+    <h2 class="md:col-span-2 text-2xl font-bold text-center text-green-300">Completar ingrediente</h2>
+
+    <!-- Nombre -->
+    <div class="md:col-span-2">
+      <label for="comp-nombre" class="block text-sm mb-1">Nombre:</label>
+      <input type="text" id="comp-nombre" class="w-full px-3 py-2 rounded bg-gray-100 text-gray-800" required>
+    </div>
+
+    <!-- Supermercado -->
+    <div>
+      <label for="comp-supermercado" class="block text-sm mb-1">Supermercado:</label>
+      <input list="supermercados" id="comp-supermercado" class="w-full px-3 py-2 rounded bg-gray-100 text-gray-800">
+      <datalist id="supermercados"></datalist>
+    </div>
+
+    <!-- Precio -->
+    <div>
+      <label for="comp-precio" class="block text-sm mb-1">Precio (€):</label>
+      <input type="number" id="comp-precio" class="w-full px-3 py-2 rounded bg-gray-100 text-gray-800" step="0.01">
+    </div>
+
+    <!-- Cantidad -->
+    <div>
+      <label for="comp-cantidad" class="block text-sm mb-1">Cantidad:</label>
+      <input type="number" id="comp-cantidad" class="w-full px-3 py-2 rounded bg-gray-100 text-gray-800" step="0.01">
+    </div>
+
+    <!-- Unidad -->
+    <div>
+      <label for="comp-unidad" class="block text-sm mb-1">Unidad:</label>
+      <select id="comp-unidad" class="w-full px-3 py-2 rounded bg-gray-100 text-gray-800">
+        <option value="">Unidad</option>
+        <option value="g">g</option>
+        <option value="kg">kg</option>
+        <option value="ml">ml</option>
+        <option value="l">l</option>
+        <option value="ud">ud</option>
+      </select>
+    </div>
+
+    <!-- Calorías -->
+    <div>
+      <label for="comp-calorias" class="block text-sm mb-1">Calorías:</label>
+      <input type="number" id="comp-calorias" class="w-full px-3 py-2 rounded bg-gray-100 text-gray-800" step="1">
+    </div>
+
+    <!-- Proteínas -->
+    <div>
+      <label for="comp-proteinas" class="block text-sm mb-1">Proteínas (g):</label>
+      <input type="number" id="comp-proteinas" class="w-full px-3 py-2 rounded bg-gray-100 text-gray-800" step="0.1">
+    </div>
+
+    <!-- Botones -->
+    <div class="md:col-span-2 flex justify-end gap-4 mt-4">
+      <button type="button" id="cerrar-completar" class="text-sm text-gray-400 hover:text-red-400">Cancelar</button>
+      <button type="submit" class="text-sm text-white bg-green-600 hover:bg-green-700 px-4 py-2 rounded">Guardar</button>
+    </div>
+
+  </form>
+</div>
+
+<a href="/" id="btn-inicio" class="btn-inicio" title="Volver al inicio">
+  <i class="fas fa-home"></i>
+</a>
+
+<script type="module" src="/static/js/lista_compra.js"></script>
+<script type="module" src="/static/js/ingredientes_pendientes.js"></script>
+
+
+
+</body>
+</html>

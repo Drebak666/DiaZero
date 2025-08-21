@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mejoras – Backlog y Planificador</title>
+  <style>
+    :root { --bg:#0f1115; --panel:#171a21; --muted:#a8b3cf; --txt:#e5e7ef; --acc:#7aa2f7; --ok:#34d399; --warn:#fbbf24; --danger:#f87171; --border:#242938; }
+    *{ box-sizing:border-box; }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial; background:var(--bg); color:var(--txt); }
+    header{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); background:var(--panel); position:sticky; top:0; z-index:2; }
+    header h1{ font-size:18px; margin:0; letter-spacing:.2px; }
+    .wrap{ max-width:1100px; margin:22px auto; padding:0 16px; }
+    .grid{ display:grid; grid-template-columns: 380px 1fr; gap:18px; align-items:start; }
+    .card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; box-shadow:0 2px 8px rgba(0,0,0,.2); }
+    .card h2{ margin:0; font-size:16px; padding:12px 14px; border-bottom:1px solid var(--border); color:#dce3ff; }
+    .card .content{ padding:14px; }
+    label{ display:block; font-size:12px; color:var(--muted); margin:8px 0 4px; }
+    input[type="text"], input[type="number"], select, textarea{
+      width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:#0d0f14; color:var(--txt); outline:none;
+    }
+    textarea{ min-height:72px; resize:vertical; }
+    .row{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .row3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
+    .actions{ display:flex; gap:8px; margin-top:12px; }
+    button{ border:0; border-radius:999px; padding:9px 14px; background:#23283b; color:var(--txt); cursor:pointer; }
+    .btn-primary{ background:var(--acc); color:#0a0a0a; font-weight:600; }
+    .btn-ok{ background:var(--ok); color:#0b0f14; font-weight:600; }
+    .btn-warn{ background:var(--warn); color:#0b0f14; font-weight:600; }
+    .btn-danger{ background:var(--danger); color:#0b0f14; font-weight:600; }
+    .tiny{ font-size:12px; color:var(--muted); }
+
+    table{ width:100%; border-collapse:collapse; }
+    th, td{ padding:10px 8px; border-bottom:1px solid var(--border); font-size:14px; }
+    th{ text-align:left; font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.3px; }
+    tr:hover td{ background:#121520; }
+    .pill{ display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; border:1px solid var(--border); background:#11131a; font-size:12px; color:#b7c1de; }
+    .muted{ color:var(--muted); }
+    .right{ text-align:right; }
+    .center{ text-align:center; }
+    .sr{ position:absolute; left:-9999px; }
+
+    .state-active{ color:var(--ok); font-weight:600; }
+    .state-inactive{ color:#7b85a9; }
+    .toolbar{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .toolbar .spacer{ flex:1; }
+
+    .filters{ display:flex; gap:10px; flex-wrap:wrap; }
+    .chip{ padding:6px 10px; border-radius:999px; border:1px solid var(--border); background:#11131a; cursor:pointer; font-size:12px; }
+    .chip.active{ background:#1a1f2f; border-color:#2a3352; }
+
+    .note{ font-size:12px; color:var(--muted); margin-top:6px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚙️ Mejoras – Backlog y Planificador</h1>
+    <div class="toolbar">
+      <button id="btn-planificar" class="btn-ok">Planificar hoy</button>
+      <span class="tiny" id="plan-res"></span>
+    </div>
+  </header>
+
+  <div class="wrap grid">
+    <section class="card">
+      <h2>Nueva / Editar mejora</h2>
+      <div class="content">
+        <input type="hidden" id="mejora-id" />
+
+        <label for="titulo">Título</label>
+        <input type="text" id="titulo" placeholder="Ej: Refactorizar módulo de tareas" />
+
+        <div class="row">
+          <div>
+            <label for="categoria">Categoría</label>
+            <input type="text" id="categoria" placeholder="Ej: Código, Lectura, Casa…" />
+          </div>
+          <div>
+            <label for="prioridad">Prioridad</label>
+            <select id="prioridad">
+              <option value="5">5 - Muy alta</option>
+              <option value="4">4 - Alta</option>
+              <option value="3" selected>3 - Media</option>
+              <option value="2">2 - Baja</option>
+              <option value="1">1 - Muy baja</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row3">
+          <div>
+            <label for="esfuerzo">Bloque (min)</label>
+            <select id="esfuerzo">
+              <option value="15">15</option>
+              <option value="25" selected>25</option>
+              <option value="45">45</option>
+            </select>
+          </div>
+          <div>
+            <label for="cooldown">Cooldown (días)</label>
+            <input type="number" id="cooldown" value="0" min="0" />
+          </div>
+          <div>
+            <label for="activa">Activa</label>
+            <select id="activa">
+              <option value="true" selected>Sí</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+        </div>
+
+        <label for="notas">Notas</label>
+        <textarea id="notas" placeholder="Detalles o checklist breve…"></textarea>
+
+        <div class="actions">
+          <button id="btn-guardar" class="btn-primary">Guardar</button>
+          <button id="btn-limpiar" title="Limpiar formulario">Limpiar</button>
+        </div>
+        <p class="note">Tip: al completar una tarea [Mejora] en la agenda, se actualiza automáticamente su <em>last_done_at</em>.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Backlog</h2>
+      <div class="content">
+        <div class="toolbar" style="margin-bottom:10px;">
+          <div class="filters">
+            <button class="chip active" data-filter="all">Todas</button>
+            <button class="chip" data-filter="active">Activas</button>
+            <button class="chip" data-filter="inactive">Inactivas</button>
+          </div>
+          <div class="spacer"></div>
+          <label class="sr" for="buscar">Buscar</label>
+          <input id="buscar" type="text" placeholder="Buscar…" style="width:220px;" />
+        </div>
+
+        <table id="tabla-mejoras">
+          <thead>
+            <tr>
+              <th>Título</th>
+              <th>Categoría</th>
+              <th class="center">Prioridad</th>
+              <th class="center">Bloque</th>
+              <th class="center">Cooldown</th>
+              <th class="center">Estado</th>
+              <th class="center">Última vez</th>
+              <th class="right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" style="grid-column: 1 / span 2;">
+      <h2>Preferencias del planificador</h2>
+      <div class="content">
+        <div class="row3">
+          <div>
+            <label for="presupuesto">Presupuesto diario (min)</label>
+            <input type="number" id="presupuesto" value="60" min="15" step="5" />
+          </div>
+          <div>
+            <label for="maxTareas">Máx. tareas diarias</label>
+            <input type="number" id="maxTareas" value="4" min="1" max="10" />
+          </div>
+          <div>
+            <label for="bloques">Bloques permitidos</label>
+            <select id="bloques" multiple size="3">
+              <option value="15" selected>15</option>
+              <option value="25" selected>25</option>
+              <option value="45">45</option>
+            </select>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="btn-guardar-prefs" class="btn-ok">Guardar preferencias</button>
+          <span class="tiny" id="prefs-guardadas"></span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Carga scripts -->
+  <script type="module">
+    import { supabase } from '/static/js/supabaseClient.js';
+    import { planificarMejorasHoy } from '/static/js/mejoras-planner.js';
+
+    const usuario = localStorage.getItem('usuario_actual') || 'desconocido';
+
+    // ======= Util =======
+    const qs = sel => document.querySelector(sel);
+    const qsa = sel => Array.from(document.querySelectorAll(sel));
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-ES') : '—';
+
+    // ======= Prefs planner (localStorage) =======
+    const PREF_KEY = 'planner_mejoras_prefs';
+    function loadPrefs(){
+      try{ return JSON.parse(localStorage.getItem(PREF_KEY)) || null; }catch{ return null; }
+    }
+    function savePrefs(p){ localStorage.setItem(PREF_KEY, JSON.stringify(p)); }
+    function getPrefsFromUI(){
+      const presupuesto = Number(qs('#presupuesto').value || 60);
+      const maxTareas = Number(qs('#maxTareas').value || 4);
+      const bloques = qsa('#bloques option').filter(o => o.selected).map(o => Number(o.value));
+      return { presupuesto, maxTareas, bloques };
+    }
+    function setPrefsToUI(p){
+      if(!p) return;
+      qs('#presupuesto').value = p.presupuesto ?? 60;
+      qs('#maxTareas').value = p.maxTareas ?? 4;
+      qsa('#bloques option').forEach(o => { o.selected = (p.bloques||[15,25]).includes(Number(o.value)); });
+    }
+
+    // ======= CRUD Mejoras =======
+    async function cargarMejoras(){
+      const { data, error } = await supabase
+        .from('mejoras')
+        .select('*')
+        .eq('usuario', usuario)
+        .order('is_active', { ascending:false })
+        .order('prioridad', { ascending:false })
+        .order('last_done_at', { ascending:true, nullsFirst:true });
+      if(error){ console.error(error); return []; }
+      return data || [];
+    }
+
+    function filtrar(mejoras){
+      const term = (qs('#buscar').value||'').toLowerCase();
+      const mode = qsa('.filters .chip').find(c=>c.classList.contains('active'))?.dataset.filter || 'all';
+      return mejoras.filter(m => {
+        const texto = `${m.titulo} ${m.categoria||''}`.toLowerCase();
+        const matchTxt = !term || texto.includes(term);
+        const matchMode = mode==='all' || (mode==='active' && m.is_active) || (mode==='inactive' && !m.is_active);
+        return matchTxt && matchMode;
+      });
+    }
+
+    function renderTabla(mejoras){
+      const tb = qs('#tabla-mejoras tbody');
+      tb.innerHTML = '';
+      filtrar(mejoras).forEach(m => {
+        const tr = document.createElement('tr');
+        tr.dataset.id = m.id;
+        tr.innerHTML = `
+          <td>
+            <div>${m.titulo}</div>
+            ${m.notes ? `<div class="muted tiny">${m.notes}</div>`: ''}
+          </td>
+          <td>${m.categoria || '<span class="muted">—</span>'}</td>
+          <td class="center"><span class="pill">${m.prioridad}</span></td>
+          <td class="center">${m.esfuerzo_min}′</td>
+          <td class="center">${m.cooldown_dias || 0}</td>
+          <td class="center">${m.is_active ? '<span class="state-active">Activa</span>' : '<span class="state-inactive">Inactiva</span>'}</td>
+          <td class="center">${fmtDate(m.last_done_at)}</td>
+          <td class="right">
+            <button class="btn-warn btn-toggle" title="Activar/Desactivar">On/Off</button>
+            <button class="btn-primary btn-edit" title="Editar">Editar</button>
+            <button class="btn-ok btn-done" title="Marcar hecho hoy">Hecha hoy</button>
+            <button class="btn-danger btn-del" title="Eliminar">Borrar</button>
+          </td>`;
+        tb.appendChild(tr);
+      });
+    }
+
+    function clearForm(){
+      qs('#mejora-id').value='';
+      qs('#titulo').value='';
+      qs('#categoria').value='';
+      qs('#prioridad').value='3';
+      qs('#esfuerzo').value='25';
+      qs('#cooldown').value='0';
+      qs('#activa').value='true';
+      qs('#notas').value='';
+    }
+
+    function fillForm(m){
+      qs('#mejora-id').value = m.id;
+      qs('#titulo').value = m.titulo;
+      qs('#categoria').value = m.categoria || '';
+      qs('#prioridad').value = String(m.prioridad||3);
+      qs('#esfuerzo').value = String(m.esfuerzo_min||25);
+      qs('#cooldown').value = String(m.cooldown_dias||0);
+      qs('#activa').value = m.is_active ? 'true' : 'false';
+      qs('#notas').value = m.notes || '';
+      window.scrollTo({ top:0, behavior:'smooth' });
+    }
+
+    async function upsertMejora(){
+      const id = qs('#mejora-id').value || null;
+      const row = {
+        usuario,
+        titulo: (qs('#titulo').value||'').trim(),
+        categoria: (qs('#categoria').value||'').trim() || null,
+        prioridad: Number(qs('#prioridad').value||3),
+        esfuerzo_min: Number(qs('#esfuerzo').value||25),
+        cooldown_dias: Number(qs('#cooldown').value||0),
+        is_active: qs('#activa').value === 'true',
+        notes: (qs('#notas').value||'').trim() || null
+      };
+      if(!row.titulo){ alert('Pon un título 🙂'); return; }
+
+      if(id){
+        const { error } = await supabase.from('mejoras').update(row).eq('id', id);
+        if(error){ console.error(error); alert('No se pudo actualizar'); return; }
+      } else {
+        const { error } = await supabase.from('mejoras').insert([row]);
+        if(error){ console.error(error); alert('No se pudo crear'); return; }
+      }
+      clearForm();
+      await refresh();
+    }
+
+    async function toggleActive(id, isActive){
+      await supabase.from('mejoras').update({ is_active: !isActive }).eq('id', id);
+    }
+    async function markDoneToday(id){
+      const hoyStr = new Date().toISOString().split('T')[0];
+      await supabase.from('mejoras').update({ last_done_at: hoyStr }).eq('id', id);
+    }
+    async function deleteMejora(id){
+      if(!confirm('¿Eliminar esta mejora?')) return;
+      await supabase.from('mejoras').delete().eq('id', id);
+    }
+
+    // ======= Eventos UI =======
+    qs('#btn-guardar').addEventListener('click', upsertMejora);
+    qs('#btn-limpiar').addEventListener('click', clearForm);
+    qs('#btn-guardar-prefs').addEventListener('click', () => {
+      const p = getPrefsFromUI();
+      savePrefs(p);
+      qs('#prefs-guardadas').textContent = 'Preferencias guardadas';
+      setTimeout(()=> qs('#prefs-guardadas').textContent='', 1800);
+    });
+
+    qs('#btn-planificar').addEventListener('click', async () => {
+      const p = loadPrefs() || getPrefsFromUI();
+      const res = await planificarMejorasHoy({
+        presupuestoMin: Number(p.presupuesto||60),
+        bloquesPermitidos: Array.isArray(p.bloques)? p.bloques:[25,15],
+        maxTareas: Number(p.maxTareas||4)
+      });
+      qs('#plan-res').textContent = res.reason==='ok' ? `Se planificaron ${res.planned} tareas` : `(${res.reason})`;
+      setTimeout(()=> qs('#plan-res').textContent='', 2500);
+    });
+
+    qsa('.filters .chip').forEach(chip=>{
+      chip.addEventListener('click', ()=>{
+        qsa('.filters .chip').forEach(c=>c.classList.remove('active'));
+        chip.classList.add('active');
+        renderTabla(window._mejoras||[]);
+      });
+    });
+    qs('#buscar').addEventListener('input', ()=> renderTabla(window._mejoras||[]));
+
+    qs('#tabla-mejoras').addEventListener('click', async (e) => {
+      const tr = e.target.closest('tr');
+      if(!tr) return;
+      const id = tr.dataset.id;
+      const m = (window._mejoras||[]).find(x=>x.id===id);
+      if(!m) return;
+
+      if(e.target.closest('.btn-edit')){
+        fillForm(m);
+        return;
+      }
+      if(e.target.closest('.btn-toggle')){
+        await toggleActive(id, m.is_active);
+        await refresh();
+        return;
+      }
+      if(e.target.closest('.btn-done')){
+        await markDoneToday(id);
+        await refresh();
+        return;
+      }
+      if(e.target.closest('.btn-del')){
+        await deleteMejora(id);
+        await refresh();
+        return;
+      }
+    });
+
+    async function refresh(){
+      window._mejoras = await cargarMejoras();
+      renderTabla(window._mejoras);
+    }
+
+    // Init
+    setPrefsToUI(loadPrefs());
+    refresh();
+  </script>
+</body>
+</html>

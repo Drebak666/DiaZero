@@ -1,0 +1,194 @@
+/* =======================================
+   📅 PAGINA CITAS.HTML
+   ======================================= */
+
+
+#citas-container {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.cita {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-left: 5px solid #3498db;
+    padding: 15px 20px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.cita strong {
+    font-size: 1.1em;
+    color: #2980b9;
+}
+
+button {
+    cursor: pointer;
+    margin-top: 10px;
+    margin-right: 10px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 3px;
+    font-size: 0.9em;
+    transition: background-color 0.3s ease;
+}
+
+.btn-estado.completado {
+    background-color: #27ae60;
+    color: white;
+}
+
+.btn-estado.completado:hover {
+    background-color: #1e8449;
+}
+
+.btn-estado.pendiente {
+    background-color: #e67e22;
+    color: white;
+}
+
+.btn-estado.pendiente:hover {
+    background-color: #ca6f1e;
+}
+
+.btn-editar {
+    background-color: #2980b9;
+    color: white;
+}
+
+.btn-editar:hover {
+    background-color: #1c5980;
+}
+
+.btn-borrar {
+    background-color: #c0392b;
+    color: white;
+}
+
+.btn-borrar:hover {
+    background-color: #922b21;
+}
+
+
+
+/* =======================================
+   📅 EDITAR CITAS.HTML
+   ======================================= */
+
+ 
+        /* Essential CSS for hiding the form initially */
+        .oculto {
+            display: none;
+        }
+
+        /* Basic styling for the form and requirements, adjust as needed */
+        #form-editar-cita {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        #form-editar-cita label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        #form-editar-cita input[type="text"],
+        #form-editar-cita input[type="date"],
+        #form-editar-cita input[type="time"] {
+            width: calc(100% - 20px);
+            padding: 8px 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        #requisitos-container {
+            border: 1px solid #eee;
+            padding: 10px;
+            min-height: 50px;
+            background-color: #fff;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        #nuevo-requisito {
+            width: calc(100% - 70px); /* Adjust width to fit button */
+            margin-right: 10px;
+        }
+
+        .req-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            padding: 3px 0;
+            border-bottom: 1px dotted #eee;
+        }
+
+        .req-item:last-child {
+            border-bottom: none;
+        }
+
+        .req-item input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        .req-item span {
+            flex-grow: 1;
+        }
+
+        .req-item button {
+            margin-left: auto; /* Push button to the right */
+            background: transparent;
+            border: none;
+            color: red;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1em;
+            padding: 2px 5px;
+        }
+
+        .form-buttons button {
+            padding: 10px 15px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .form-buttons button[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .form-buttons button[type="button"] { /* For cancel button */
+            background-color: #f44336;
+            color: white;
+        }
+
+        /* Styles for the "Mostrar requisitos" toggle button in appointment cards */
+        .btn-toggle-requisitos {
+            background: none !important; /* Override button styles */
+            border: 1px solid #ccc !important;
+            padding: 5px 10px !important;
+            border-radius: 5px !important;
+            cursor: pointer !important;
+            margin-bottom: 5px !important;
+            display: block !important;
+            font-size: 0.9em !important;
+            color: #333 !important;
+        }
+        .btn-toggle-requisitos:hover {
+            background-color: #f0f0f0 !important;
+        }
+        .clip-icon {
+            margin-left: 5px;
+        }
+   
+

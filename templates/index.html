@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Mi Agenda</title>
+
+<script>
+  // Solo si no está ya establecido
+  if (!localStorage.getItem("usuario_actual")) {
+    localStorage.setItem("usuario_actual", localStorage.getItem("username"));
+  }
+</script>
+
+<!-- Font Awesome para los iconos -->
+<link crossorigin="anonymous" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" rel="stylesheet"/>
+<!-- Enlace a tu hoja de estilos principal -->
+<link href="/static/css/style.css" rel="stylesheet"/>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<!-- OneSignal SDK (cargar solo una vez) -->
+
+
+
+</head>
+
+<body>
+<header style="margin-top:45px; text-align:center;">
+  <span id="nombre-usuario" 
+        style="display:inline-block; width:100%; max-width:600px; padding:10px; background:#0f172a; border:2px solid #00f5ff; border-radius:8px; color:white; font-weight:bold;">
+    Usuario
+  </span>
+</header>
+
+
+
+<main>
+  <!-- Próximas Citas -->
+  <section class="main-section" id="proximas-citas">
+    <div class="section-content" id="citas-container"></div>
+    <div class="ver-mas-container">
+      <button class="btn-ver-mas" id="ver-mas-citas">
+        <i class="fas fa-chevron-down"></i> Ver más
+      </button>
+    </div>
+
+    <!-- Form edición cita -->
+    <div class="oculto form-modal" id="form-editar-cita">
+      <form id="editar-formulario" class="form-editar-cita">
+        <input id="editar-id" type="hidden" />
+        <div class="form-group" id="description-group">
+          <label for="editar-descripcion">Descripción:</label>
+          <input id="editar-descripcion" type="text" placeholder="Descripción" />
+        </div>
+        <div class="form-group" id="date-group">
+          <label for="editar-fecha">Fecha:</label>
+          <input id="editar-fecha" type="date" />
+        </div>
+        <div class="form-row" id="time-row">
+          <div class="form-group flex-item">
+            <label for="editar-hora-inicio">Hora de Inicio:</label>
+            <input id="editar-hora-inicio" type="time" />
+          </div>
+          <div class="form-group flex-item">
+            <label for="editar-hora-fin">Hora de Fin:</label>
+            <input id="editar-hora-fin" type="time" />
+          </div>
+        </div>
+        <div class="form-group" id="requirements-label-input-group">
+          <label for="nuevo-requisito">Añadir Requisito:</label>
+          <input id="nuevo-requisito" type="text" placeholder="Ej: DNI, Informe médico" />
+        </div>
+        <div id="requirements-list-and-button-area">
+          <div class="requirements-list" id="requisitos-container"></div>
+          <button type="button" id="añadir-requisito" class="btn-secondary">Añadir requisito</button>
+        </div>
+        <div class="form-buttons">
+          <button type="submit" class="btn-success">Guardar Cambios</button>
+          <button type="button" id="recoger-edicion" class="btn-cancel">Recoger</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Form edición tarea -->
+    <div class="oculto form-modal" id="form-editar-tarea">
+      <h3>Editar Tarea</h3>
+      <form id="editar-formulario-tarea" class="form-editar-cita">
+        <input id="editar-id-tarea" type="hidden" />
+        <div class="form-group">
+          <label for="editar-descripcion-tarea">Descripción:</label>
+          <input id="editar-descripcion-tarea" type="text" placeholder="Descripción" />
+        </div>
+        <div class="form-grid-2cols">
+          <div class="form-group">
+            <label for="editar-fecha-tarea">Fecha:</label>
+            <input id="editar-fecha-tarea" type="date" />
+          </div>
+          <div class="form-group">
+            <label for="editar-prioridad-tarea">Prioridad:</label>
+            <select id="editar-prioridad-tarea">
+              <option value="Baja">Baja</option>
+              <option value="Media">Media</option>
+              <option value="Alta">Alta</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid-2cols">
+          <div class="form-group">
+            <label for="editar-hora-inicio-tarea">Hora de Inicio:</label>
+            <input id="editar-hora-inicio-tarea" type="time" />
+          </div>
+          <div class="form-group">
+            <label for="editar-hora-fin-tarea">Hora de Fin:</label>
+            <input id="editar-hora-fin-tarea" type="time" />
+          </div>
+        </div>
+        <div class="form-buttons">
+          <button type="submit" class="btn-success">Guardar Cambios</button>
+          <button type="button" id="recoger-edicion-tarea" class="btn-cancel">Recoger</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Añadir Actividad -->
+  <section class="main-section" id="añadir-actividad">
+    <div class="section-content" id="form-nueva-actividad">
+      <form id="nueva-actividad-formulario">
+        <div class="activity-type-buttons">
+          <button class="icon-button" data-type="Tarea" id="btn-tarea-actividad"><i class="fas fa-clipboard-list"></i></button>
+          <button class="icon-button" data-type="Rutina" id="btn-rutina-actividad"><i class="fas fa-redo-alt"></i></button>
+          <button class="icon-button" data-type="Cita" id="btn-cita-actividad"><i class="fas fa-calendar-alt"></i></button>
+
+          <button class="icon-button nota-btn" id="btn-nota-actividad" type="button">
+            <i class="fas fa-sticky-note" style="color:red;"></i>
+            <span class="badge-nota" id="contador-notas">0</span>
+          </button>
+
+          <a class="icon-button lista-btn" id="btn-lista" href="/lista-compra" title="Lista de compra">
+            <i class="fas fa-list"></i>
+            <span class="badge-lista" id="contador-lista">0</span>
+          </a>
+        </div>
+
+        <div class="activity-quick-input">
+          <div class="form-group">
+            <input id="nueva-actividad-descripcion" type="text" placeholder="Añadir una nueva tarea, rutina o cita..." />
+          </div>
+        </div>
+
+        <div class="oculto" id="formularios-actividad">
+          <!-- Tarea -->
+          <div class="tipo-formulario oculto" id="form-tarea">
+           <div class="form-group">
+  <label>Asignar a grupo (opcional)</label>
+  <select class="select-grupo" data-target="tarea">
+    <option value="">— Ninguno —</option>
+  </select>
+</div>
+
+
+            <div class="form-grid-2cols">
+              <div class="form-group">
+                <label for="tarea-fecha">Fecha:</label>
+                <input id="tarea-fecha" name="tarea_fecha" type="date"/>
+              </div>
+          
+              <div class="form-group">
+                <label for="tarea-hora-inicio">Hora de Inicio:</label>
+                <input id="tarea-hora-inicio" name="tarea_hora_inicio" type="time"/>
+              </div>
+              <div class="form-group">
+                <label for="tarea-hora-fin">Hora de Fin:</label>
+                <input id="tarea-hora-fin" name="tarea_hora_fin" type="time"/>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rutina -->
+          <div class="tipo-formulario oculto" id="form-rutina">
+<div class="form-group">
+  <label>Asignar a grupo (opcional)</label>
+  <select class="select-grupo" data-target="rutina">
+    <option value="">— Ninguno —</option>
+  </select>
+</div>
+
+
+            <div class="form-grid-2cols">
+              <div class="form-group">
+                <label for="rutina-fecha">Fecha:</label>
+                <input id="rutina-fecha" name="rutina_fecha" type="date"/>
+              </div>
+              <div class="form-group">
+                <label for="rutina-fecha-fin">Fecha Fin:</label>
+                <input id="rutina-fecha-fin" name="rutina_fecha_fin" type="date"/>
+              </div>
+              
+            </div>
+            <div class="form-grid-2cols">
+              <div class="form-group">
+                <label for="rutina-hora-inicio">Hora Inicio:</label>
+                <input id="rutina-hora-inicio" name="rutina_hora_inicio" type="time"/>
+              </div>
+              <div class="form-group">
+                <label for="rutina-hora-fin">Hora Fin:</label>
+                <input id="rutina-hora-fin" name="rutina_hora_fin" type="time"/>
+              </div>
+            </div>
+            <div class="form-group dias-checkboxes">
+              <label>Días:</label>
+              <div class="dias-semana-wrapper">
+                <div class="dias-fila">
+                  <label><input type="checkbox" name="rutina_dia_semana" value="Lunes"> L</label>
+                  <label><input type="checkbox" name="rutina_dia_semana" value="Martes"> M</label>
+                  <label><input type="checkbox" name="rutina_dia_semana" value="Miércoles"> X</label>
+                  <label><input type="checkbox" name="rutina_dia_semana" value="Jueves"> J</label>
+                </div>
+                <div class="dias-fila">
+                  <label><input type="checkbox" name="rutina_dia_semana" value="Viernes"> V</label>
+                  <label><input type="checkbox" name="rutina_dia_semana" value="Sábado"> S</label>
+                  <label><input type="checkbox" name="rutina_dia_semana" value="Domingo"> D</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cita -->
+          <div class="tipo-formulario oculto" id="form-cita">
+          <div class="form-group">
+  <label>Asignar a grupo (opcional)</label>
+  <select class="select-grupo" data-target="cita">
+    <option value="">— Ninguno —</option>
+  </select>
+</div>
+
+            <div class="form-grid-2cols">
+              <div class="form-group">
+                <label for="cita-hora-inicio">Hora de Inicio:</label>
+                <input id="cita-hora-inicio" name="cita_hora_inicio" type="time" />
+              </div>
+              <div class="form-group">
+                <label for="cita-hora-fin">Hora de Fin:</label>
+                <input id="cita-hora-fin" name="cita_hora_fin" type="time" />
+              </div>
+            </div>
+            <div class="form-grid-2cols">
+              <div class="form-group">
+                <label for="cita-fecha">Fecha:</label>
+                <input id="cita-fecha" name="cita_fecha" type="date" />
+              </div>
+              <div class="form-group">
+                <label for="nuevo-requisito-cita">Añadir Requisito:</label>
+                <input type="text" id="nuevo-requisito-cita" placeholder="Ej: DNI, Informe médico" />
+              </div>
+            </div>
+            <div class="form-grid-2cols">
+              <div class="form-group centrado-boton">
+                <button type="button" id="btn-añadir-requisito-cita" class="btn-secondary">Añadir requisito</button>
+              </div>
+              <div class="form-group">
+                <details class="requisitos-accordion" id="cita-requisitos-accordion">
+                  <summary>Requisitos</summary>
+                  <div class="requirements-list" id="cita-requisitos-container"></div>
+                </details>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ingrediente -->
+          <div class="tipo-formulario oculto" id="form-ingrediente">
+            <div class="form-grid-3cols">
+              <div class="form-group">
+                <label for="ingrediente-supermercado">Supermercado:</label>
+                <select id="ingrediente-supermercado">
+                  <option value="Lidl">Lidl</option>
+                  <option value="Mercadona">Mercadona</option>
+                  <option value="Carrefour">Carrefour</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="ingrediente-precio">Precio:</label>
+                <input id="ingrediente-precio" type="number" step="0.01" />
+              </div>
+              <div class="form-group">
+                <label for="ingrediente-cantidad">Cantidad:</label>
+                <input id="ingrediente-cantidad" type="number" step="0.01" />
+              </div>
+            </div>
+            <div class="form-grid-3cols">
+              <div class="form-group">
+                <label for="ingrediente-unidad">Unidad:</label>
+                <select id="ingrediente-unidad">
+                  <option value="g">g</option>
+                  <option value="ml">ml</option>
+                  <option value="unidad">unidad</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="ingrediente-calorias">Calorías:</label>
+                <input id="ingrediente-calorias" type="number" />
+              </div>
+              <div class="form-group">
+                <label for="ingrediente-proteinas">Proteínas:</label>
+                <input id="ingrediente-proteinas" type="number" step="0.1" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Receta -->
+          <div class="tipo-formulario oculto" id="form-receta">
+            <div class="form-group">
+              <label for="receta-instrucciones">Instrucciones:</label>
+              <textarea id="receta-instrucciones" name="receta_instrucciones" placeholder="Pasos para preparar la receta..." rows="5"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Ingredientes de la Receta:</label>
+              <div class="requirements-list" id="receta-ingredientes-container"></div>
+              <div class="add-requirement-input">
+                <select class="select-full-width" id="receta-seleccionar-ingrediente">
+                  <option value="">Selecciona un ingrediente</option>
+                </select>
+                <input id="receta-cantidad-ingrediente" placeholder="Cantidad" step="0.01" type="number"/>
+                <select id="receta-unidad-ingrediente">
+                  <option value="g">g</option>
+                  <option value="ml">ml</option>
+                  <option value="unidad">unidad</option>
+                </select>
+                <button class="btn-secondary" id="btn-añadir-ingrediente-receta" type="button">Añadir Ingrediente</button>
+              </div>
+            </div>
+            <div id="totales-receta" style="margin-top: 10px;">
+              <p><strong>Precio total:</strong> <span id="total-precio">0.00</span> €</p>
+              <p><strong>Calorías totales:</strong> <span id="total-calorias">0</span> kcal</p>
+              <p><strong>Proteínas totales:</strong> <span id="total-proteinas">0</span> g</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-buttons oculto" id="botones-actividad">
+          <button class="btn-success btn-large" id="btn-guardar-actividad" type="submit">Guardar</button>
+          <button class="btn-cancel" id="cancelar-nueva-actividad" type="button">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Agenda de Hoy -->
+  <section class="main-section" id="agenda-de-hoy">
+    <div class="section-content" id="agenda-container"></div>
+  </section>
+
+  <!-- Comida de Hoy (sin carrusel) -->
+  <section class="main-section" id="comida-de-hoy">
+    <div class="section-content" id="comida-container"></div>
+  </section>
+
+  <!-- Navegación (GRID 3 columnas, sin carrusel) -->
+<section class="main-section" id="navegacion">
+  <h2>NAVEGACIÓN</h2>
+  <div class="section-content">
+<div class="nav-grid" style="display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px; justify-items:center;">
+      <a class="icon-button" href="/reproductor"><i class="fas fa-music"></i><span>Audio</span></a>
+      <a class="icon-button" href="/documentos"><i class="fas fa-file-alt"></i><span>Docs</span></a>
+      <a class="icon-button" href="/registro"><i class="fas fa-clipboard-check"></i><span>Registro</span></a>
+      <a class="icon-button" href="/calendario"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
+      <a class="icon-button" href="/ejercicio"><i class="fas fa-dumbbell"></i><span>Ejercicio</span></a>
+      <a class="icon-button" href="/mejoras"><i class="fas fa-wrench"></i><span>Mejoras</span></a>
+
+      <!-- Botón de cerrar sesión abajo -->
+      <button id="cerrar-sesion" class="icon-button" style="background-color:red; border:none; cursor:pointer;">
+        <i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+
+  <!-- Acceso Administración -->
+  <section class="main-section" id="admin-acceso">
+    <a href="/admin" class="btn-admin-wide">
+      <i class="fas fa-cog"></i>
+      <span>Administración</span>
+    </a>
+  </section>
+
+  
+</main>
+
+<footer></footer>
+
+<!-- Scripts -->
+ 
+<script src="{{ url_for('static', filename='js/supabaseClient.js') }}" type="module"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}" type="module"></script>
+<script src="{{ url_for('static', filename='js/upcoming-appointments.js') }}" type="module"></script>
+{% if cargar_add_activity %}
+  <script src="{{ url_for('static', filename='js/add-activity.js') }}" type="module"></script>
+{% endif %}
+<script src="{{ url_for('static', filename='js/today-agenda.js') }}" type="module"></script>
+<script src="{{ url_for('static', filename='js/recetas.js') }}" type="module"></script>
+<script src="{{ url_for('static', filename='js/comida_dia.js') }}" type="module"></script>
+<script src="{{ url_for('static', filename='js/usuario.js') }}" type="module"></script>
+
+
+<!-- Asegurar sesión + decidir si mostrar Admin -->
+<script type="module">
+  import { supabase } from "{{ url_for('static', filename='js/supabaseClient.js') }}";
+  
+  const ADMIN_SELECTORS = ['#admin-acceso', '#admin-btn'];
+  const hideAdminUI = () => ADMIN_SELECTORS.forEach(sel => document.querySelector(sel)?.classList.add('oculto'));
+
+  (async () => {
+    const username = localStorage.getItem('usuario_actual');
+    if (!username) return hideAdminUI();
+
+    try {
+      await fetch('/api/ensure-session', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ username })
+      });
+    } catch (_) { /* no bloquear */ }
+
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('role')
+      .eq('username', username)
+      .maybeSingle();
+
+    if (error || !data || data.role !== 'admin') hideAdminUI();
+  })();
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const username = localStorage.getItem("usuario_actual");
+  if (username) {
+    document.getElementById("nombre-usuario").textContent = username;
+  }
+});
+</script>
+<script>
+  if (!location.pathname.startsWith('/app')) {
+    if (localStorage.getItem('modo_continuo') !== 'on') {
+      localStorage.setItem('modo_continuo', 'on');
+      const to = location.pathname + location.search + location.hash;
+      location.replace('/app?to=' + encodeURIComponent(to));
+    }
+  }
+</script>
+
+
+
+
+
+
+
+
+</body>
+</html>

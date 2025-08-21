@@ -1,0 +1,93 @@
+/* ===== Base admin ===== */
+:root{
+  --admin-maxw: 480px;
+  --admin-bg: #121212;
+  --admin-card: #1A1A1A;
+  --admin-border: #2f2f2f;
+  --admin-text: #fff;
+}
+
+html,body{
+  margin:0; padding:0; background:var(--admin-bg); color:var(--admin-text);
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+
+/* Header */
+.admin-header{
+  display:flex; align-items:center; gap:12px;
+  width: calc(100% - 30px); max-width: var(--admin-maxw);
+  margin: 12px auto 0; padding: 0 8px;
+}
+.admin-header h1{ margin:0 auto 0 0; font-size:1.2rem; font-weight:700; }
+.admin-back{
+  display:inline-flex; align-items:center; gap:8px;
+  text-decoration:none; color:#8be9fd; font-weight:600;
+}
+.admin-back i{ font-size:1rem; }
+
+/* Contenedor principal y secciones */
+.admin-container{
+  width: calc(100% - 30px); max-width: var(--admin-maxw);
+  margin: 8px auto 20px;
+}
+.admin-section{
+  margin: 10px 0;
+}
+.admin-section h2{
+  margin: 0 0 10px; text-transform: uppercase; letter-spacing:.5px;
+  font-size: 1rem; text-align:center;
+}
+
+/* Card */
+.admin-card{
+  background: var(--admin-card);
+  border: 1px solid var(--admin-border);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.35);
+}
+
+/* Botonera */
+.admin-actions{
+  display:flex; justify-content:center; gap:12px; flex-wrap:wrap;
+}
+
+/* Botón (icono + texto) */
+.admin-btn{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  width: 92px; height: 92px;
+  background:#2A2A2A; border:1px solid #3a3a3a; border-radius:12px;
+  color:#fff; text-decoration:none; gap:6px;
+  transition: transform .15s ease, filter .15s ease, box-shadow .15s ease;
+  box-shadow: 0 2
+
+  /* Accesos de alimentación */
+.admin-actions{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+}
+@media (max-width:520px){
+  .admin-actions{ grid-template-columns:1fr 1fr; }
+}
+.admin-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:12px;
+  border-radius:12px;
+  background:#1e1e1e;
+  color:#fff;
+  text-decoration:none;
+  font-weight:600;
+  box-shadow:0 2px 8px rgba(0,0,0,.3);
+  transition:transform .15s ease;
+}
+.admin-btn i{ font-size:1.1rem; }
+.admin-btn:hover{ transform:translateY(-2px); }
+
+/* (opcional) colorcitos de iconos */
+.admin-btn[href="/menu"] i{ color:#8be9fd; }
+.admin-btn[href="/despensa"] i{ color:#ffd166; }
+.admin-btn[href="/alimentacion"] i{ color:#ff7aa2; }

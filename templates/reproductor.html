@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Biblioteca de música — móvil optimizado</title>
+  <link rel="icon" href="/static/favicon.png">
+  <link href="/static/css/style.css" rel="stylesheet"/>
+  <link crossorigin="anonymous" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    /* === Fuentes y tema global (fuera de cualquier @media) === */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Orbitron:wght@600;700&display=swap');
+
+    :root{
+      --bg:#0f172a; --txt:#e5e7eb; --muted:#94a3b8;
+      --panel:#1f2937; --panel-2:#374151; --line:rgba(255,255,255,.08);
+      --accent:#14b8a6; --accent-2:#06b6d4; --warn:#f59e0b; --danger:#ef4444; --success:#22c55e;
+      --radius:16px; --container: 480px; /* 1024px (max-w-5xl) */
+      --pad:clamp(.75rem,2vw,1.25rem);
+      --glow:0 0 0 .5px rgba(20,184,166,.35),0 0 16px rgba(20,184,166,.18);
+    }
+
+    html, body{
+      background:var(--bg);
+      color:var(--txt);
+      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      margin:0;
+    }
+
+    /* —— Overrides scoped para ganar a Tailwind sin tocar tu JS —— */
+    .theme-player main{
+      max-width:var(--container);
+    }
+    .theme-player main.bg-gray-800{
+      background: var(--panel) !important;
+      border: 1px solid var(--line) !important;
+      border-radius: .75rem;
+      box-shadow: 0 12px 40px rgba(0,0,0,.45);
+    }
+    .theme-player section.bg-gray-700{
+      background: var(--panel-2) !important;
+      border: 1px solid var(--line) !important;
+    }
+
+    /* Tarjeta de canción cuando la reetiquetemos desde el JS */
+    .theme-player .player-card{
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: .75rem;
+      box-shadow: 0 6px 20px rgba(0,0,0,.35);
+    }
+    .theme-player .player-card:hover{ filter: brightness(1.06); }
+
+    .theme-player .song-title{ color: var(--txt); font-weight:600; font-size:1.05rem; }
+    .theme-player .song-artist{ color: var(--muted); font-size:.9rem; }
+
+    .theme-player .play-button{
+      background: var(--accent);
+      color:#062b1a;
+      border-radius: 999px;
+      width: 2.5rem; height: 2.5rem;
+      box-shadow: var(--glow), 0 8px 24px rgba(0,0,0,.35);
+    }
+    .theme-player .delete-button{
+      background: var(--danger);
+      color: #160606;
+      border-radius: 999px;
+      width: 2.5rem; height: 2.5rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    }
+
+    /* Inputs */
+    .theme-player input[type="text"], .theme-player input[type="search"]{
+      background:#0b1220; color:var(--txt); border:1px solid var(--line);
+      border-radius:.5rem; outline:none;
+    }
+    .theme-player input[type="text"]:focus{
+      box-shadow:0 0 0 2px var(--accent);
+    }
+
+    /* Compacto móvil */
+    @media (max-width:640px){
+      .btn-compact{ padding:.35rem .5rem; font-size:.75rem; line-height:1rem; }
+      .input-compact{ padding:.4rem .5rem; font-size:.8rem; }
+      .rounded-mobile{ border-radius:.5rem; }
+    }
+    /* Menos margen/padding lateral en escritorio */
+@media (min-width:1024px){
+  /* el body tiene p-2 sm:p-4 -> lo recortamos en X */
+  .theme-player{
+    padding-left: .5rem !important;
+    padding-right: .5rem !important;
+  }
+
+  /* main llevaba md:p-8 -> lo dejamos en ~1rem por lado */
+  .theme-player main{
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* section llevaba sm:p-4 md:p-6 -> bajamos un poco en X */
+  .theme-player section{
+    padding-left: .75rem !important;
+    padding-right: .75rem !important;
+  }
+
+  /* cada elemento de la lista (tenía p-4) -> menos en X */
+  .theme-player #songs-list li,
+  .theme-player #songs-list li.player-card{
+    padding-left: .75rem !important;
+    padding-right: .75rem !important;
+    column-gap: .5rem; /* un pelín menos de separación entre iconos y texto */
+  }
+}
+
+  </style>
+</head>
+
+<body class="theme-player pt-16 sm:pt-0 min-h-screen flex flex-col items-center p-2 sm:p-4">
+  <main class="w-full max-w-5xl mx-auto bg-gray-800 rounded-mobile sm:rounded-lg shadow-2xl p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
+    <!-- Buscador + refrescar -->
+    <section class="bg-gray-700 tight-x tight-y sm:p-4 md:p-6 rounded-mobile sm:rounded-lg shadow-inner">
+      <div class="flex items-center justify-between mb-2 sm:mb-3 gap-1 sm:gap-2">
+        <div class="flex items-center gap-1 sm:gap-2 w-full">
+          <input id="search-input" type="text" placeholder="Buscar título o artista"
+                 class="input-compact p-2 sm:p-2 text-xs sm:text-sm rounded bg-gray-800 border border-gray-600 focus:ring-2 focus:ring-teal-500 w-full"/>
+          <button id="btn-refrescar" class="btn-compact text-xs sm:text-sm bg-teal-500 hover:bg-teal-600 text-white py-2 px-3 sm:py-2 sm:px-3 rounded-md">
+            Refrescar
+          </button>
+        </div>
+      </div>
+
+      <!-- Lista -->
+      <ul id="songs-list" class="space-y-2 sm:space-y-3">
+        <li class="text-center text-gray-400">Cargando…</li>
+      </ul>
+    </section>
+  </main>
+
+  <!-- Scripts -->
+  <script src="{{ url_for('static', filename='js/supabaseClient.js') }}" type="module"></script>
+  <script src="{{ url_for('static', filename='js/reproductor.js') }}" type="module"></script>
+</body>
+</html>

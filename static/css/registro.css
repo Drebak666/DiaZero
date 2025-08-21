@@ -1,0 +1,244 @@
+/* === REGISTRO — Dark & Sinister (con pulso) === */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+
+:root{
+  --bg: #0b0f14;           /* fondo base */
+  --panel: #0f1622;        /* tarjetas */
+  --panel-2: #0b1220;      /* inputs */
+  --line: #1f2836;         /* bordes */
+  --txt: #e5e7eb;          /* texto */
+  --muted: #9aa4b2;        /* secundario */
+  --accent: #ef4444;       /* rojo maléfico */
+  --accent-2: #7c3aed;     /* violeta de cámara */
+  --success: #22c55e;      /* verde tóxico */
+  --shadow: 0 12px 32px rgba(0,0,0,.55);
+  --glow-red: 0 0 0 2px rgba(239,68,68,.35), 0 0 18px rgba(239,68,68,.18);
+
+  /* ancho máximo (PC) */
+  --page-max: 480px;
+}
+
+*{ box-sizing:border-box; }
+
+body{
+  margin:0; padding:0;
+  font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  color:var(--txt);
+  background:
+    radial-gradient(1200px 800px at -20% -10%, rgba(239,68,68,.05), transparent 60%),
+    radial-gradient(1000px 600px at 120% 10%, rgba(124,58,237,.05), transparent 60%),
+    linear-gradient(180deg, #0b0f14 0%, #0b0f14 100%);
+}
+
+/* Estructura */
+main.main-section{
+  display:flex; flex-direction:column; align-items:center;
+  padding:1rem;
+}
+.section-content{
+  width:100%;
+  max-width:var(--page-max);  /* ← 480px en PC, 100% en móvil */
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:1.5rem;
+  margin-bottom:2rem;
+  box-shadow: var(--shadow);
+}
+
+/* Títulos con leve brillo rojo */
+h2, h3{
+  margin:0 0 1rem 0;
+  text-align:center;
+  font-weight:800;
+  letter-spacing:.3px;
+  color:var(--txt);
+  text-shadow: 0 0 10px rgba(239,68,68,.12);
+  position:relative;
+}
+h2::after, h3::after{
+  content:"";
+  display:block;
+  width:70px; height:2px;
+  margin:.4rem auto 0;
+  background:linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity:.6;
+}
+
+/* Grids */
+.form-group{ margin-bottom:1.2rem; }
+.form-grid-2cols,
+.form-group-horizontal{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:1rem;
+}
+.form-subgroup{ display:flex; flex-direction:column; }
+
+/* Labels */
+label{
+  display:block; margin-bottom:.45rem; font-weight:600; color:var(--muted);
+}
+
+/* Inputs / selects / textarea */
+input[type="text"],
+input[type="date"],
+input[type="file"],
+input[list],
+textarea,
+select,
+#filtro-tipo{
+  width:100%;
+  padding:.7rem .8rem;
+  font-size:1rem;
+  color:var(--txt);
+  background:var(--panel-2);
+  border:1px solid var(--line);
+  border-radius:12px;
+  outline:none;
+  transition: box-shadow .15s ease, border-color .15s ease, transform .05s ease;
+}
+input::placeholder, textarea::placeholder{ color:#6b7280; }
+input:focus, textarea:focus, select:focus{
+  border-color: var(--accent);
+  box-shadow: var(--glow-red);
+}
+input[type="file"]{ color:var(--muted); }
+
+/* Botones (ahora con parpadeo/pulso) */
+.btn-success,
+.btn-foto,
+.btn-cerrar{
+  position:relative;          /* para el anillo ::after */
+  border:none; cursor:pointer; font-weight:700;
+  border-radius:999px; padding:.7rem 1rem; width:100%;
+  transition: transform .05s ease, filter .15s ease, box-shadow .2s ease;
+}
+.btn-success{
+  background: linear-gradient(180deg,#23d36a,#1aa959);
+  color:#07160e; box-shadow: 0 10px 24px rgba(34,197,94,.25);
+  animation: blinkPulse 2.6s ease-in-out infinite;
+}
+.btn-foto{
+  background: linear-gradient(180deg,#8b5cf6,#7c3aed);
+  color:#0b0f14; box-shadow: 0 10px 24px rgba(124,58,237,.25);
+  animation: blinkPulse 2.8s ease-in-out infinite;
+}
+.btn-cerrar{
+  background:#293241; color:#d1d5db; box-shadow: 0 8px 20px rgba(0,0,0,.3);
+  animation: blinkPulse 3.2s ease-in-out infinite;
+}
+.btn-success:hover,
+.btn-foto:hover,
+.btn-cerrar:hover{
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+/* Anillo/halo que “respira” */
+.btn-success::after,
+.btn-foto::after,
+.btn-cerrar::after{
+  content:"";
+  position:absolute; inset:-2px; border-radius:999px;
+  pointer-events:none; opacity:.2;
+  transform: scale(1);
+  filter: blur(3px);
+  animation: ringPulse 2.8s ease-in-out infinite;
+  border: 1px solid rgba(239,68,68,.35); /* rojo por defecto */
+}
+.btn-success::after{ border-color: rgba(34,197,94,.35); }
+.btn-foto::after{   border-color: rgba(124,58,237,.35); }
+.btn-cerrar::after{ border-color: rgba(148,163,184,.35); }
+
+/* Animaciones */
+@keyframes blinkPulse{
+  0%,100%{ box-shadow: 0 10px 24px rgba(239,68,68,0.0); filter:brightness(1); }
+  50%   { box-shadow: 0 0 24px rgba(239,68,68,.25); filter:brightness(1.07); }
+}
+@keyframes ringPulse{
+  0%,100%{ opacity:.15; transform:scale(1); }
+  50%    { opacity:.45; transform:scale(1.03); }
+}
+
+/* Respeto accesibilidad: si reducen movimiento, sin animaciones */
+@media (prefers-reduced-motion: reduce){
+  .btn-success, .btn-foto, .btn-cerrar{ animation:none !important; }
+  .btn-success::after, .btn-foto::after, .btn-cerrar::after{ animation:none !important; }
+}
+
+/* Lista de registros */
+.registro-item{
+  background:#0e1420;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:1rem;
+  margin-bottom:1rem;
+  box-shadow: var(--shadow);
+}
+.registro-item strong{ color:#f8fafc; }
+.registro-item em{ color:var(--muted); }
+.registro-item a{ color:#60a5fa; text-decoration:none; }
+.registro-item a:hover{ text-decoration:underline; }
+.registro-item hr{
+  border:none; border-top:1px solid var(--line); margin:1rem 0 .5rem 0;
+}
+
+/* Modal cámara “búnker” */
+.modal-camara{
+  position:fixed; inset:auto; top:50%; left:50%; transform:translate(-50%,-50%);
+  width: min(90vw, 520px);
+  background:#0c1118;
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:20px;
+  z-index:1000; display:none;
+  box-shadow: 0 30px 80px rgba(0,0,0,.7), var(--glow-red);
+}
+.modal-camara.visible{ display:block; }
+.modal-camara video{ width:100%; border-radius:10px; background:#000; }
+
+/* Responsive */
+@media (max-width: 600px){
+  .form-grid-2cols,
+  .form-group-horizontal{ grid-template-columns:1fr; }
+  .section-content{ padding:1rem; }
+}
+
+/* Botones con vidilla */
+.btn-vibe{
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: .35rem .65rem;
+  background: #0b1220;
+  color: #e5e7eb;
+  border: 1px solid rgba(255,255,255,.14);
+  transition: transform .05s ease, filter .15s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.btn-vibe i{ margin-right:.35rem; transition: transform .2s ease; }
+.btn-vibe:hover{ filter: brightness(1.08); transform: translateY(-1px); }
+.btn-vibe:active{ transform: translateY(0); }
+.btn-vibe:hover i{ transform: translateY(-1px); }
+
+/* Editar = cian */
+.btn-vibe-edit{ border-color: rgba(56,189,248,.45); }
+.btn-vibe-edit:hover{ box-shadow: 0 0 0 2px rgba(56,189,248,.25), 0 0 18px rgba(56,189,248,.18); }
+.btn-vibe-edit i{ color:#38bdf8; }
+
+/* Borrar = rojo */
+.btn-vibe-delete{ border-color: rgba(239,68,68,.45); }
+.btn-vibe-delete:hover{ box-shadow: 0 0 0 2px rgba(239,68,68,.25), 0 0 18px rgba(239,68,68,.18); }
+.btn-vibe-delete i{ color:#ef4444; }
+
+/* Pulso/Parpadeo sutil */
+@keyframes pulseGlowCyan { 0%,100%{ box-shadow:none; } 50%{ box-shadow:0 0 0 2px rgba(56,189,248,.25),0 0 18px rgba(56,189,248,.18);} }
+@keyframes pulseGlowRed  { 0%,100%{ box-shadow:none; } 50%{ box-shadow:0 0 0 2px rgba(239,68,68,.25),0 0 18px rgba(239,68,68,.18);} }
+
+.btn-vibe-edit.animate   { animation: pulseGlowCyan 2.2s ease-in-out infinite; }
+.btn-vibe-delete.animate { animation: pulseGlowRed  2.4s ease-in-out infinite; }
+
+/* Respeta accesibilidad */
+@media (prefers-reduced-motion: reduce){
+  .btn-vibe-edit.animate, .btn-vibe-delete.animate{ animation: none !important; }
+}

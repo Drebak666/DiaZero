@@ -1,0 +1,1305 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #121212;
+  color: white;
+  font-family: sans-serif;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* =======================================
+   🌙 MODO OSCURO - ACTUALIZACIÓN VISUAL
+   ======================================= */
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #121212;
+  color: #FFFFFF;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 15px;
+}
+
+/* ================== 🕒 FECHA & HORA HEADER ================== */
+.header-date {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.4em;
+  font-weight: bold;
+}
+
+.header-date i {
+  font-size: 1.2em;
+}
+
+/* ================== 🧾 SECCIONES ================== */
+section.main-section {
+  width: calc(100% - 30px);
+  max-width: 480px;
+  margin: 10px auto;
+  padding: 20px;
+  background-color: #1E1E1E;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  box-sizing: border-box;
+}
+
+h2 {
+  color: #FFFFFF;
+  font-size: 1.2em;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 15px;
+}
+
+/* ================== 📅 CITA ITEM (colores auxiliares) ================== */
+.cita-descripcion {
+  font-weight: bold;
+  font-size: 1em;
+  color: #00BFFF;
+}
+.cita-tiempo-restante {
+  color: #00FFD0;
+  font-size: 0.95em;
+  font-weight: bold;
+}
+.cita-item.completed-cita-item {
+  background-color: #2C3E3E;
+  border-left: 4px solid #00D27F;
+}
+
+/* ================== 🟢 BOTONES ACCIONES (EN FILA) ================== */
+.btn-action.btn-complete { background-color: #00D27F; }
+.btn-action.btn-edit { background-color: #FFD93D; color: black; }
+.btn-action.btn-delete { background-color: #FF4B5C; }
+.btn-action:hover { transform: scale(1.1); }
+
+/* ================== ➕ BOTONES AÑADIR ACTIVIDAD & COMIDA (EN FILA) ================== */
+.activity-type-buttons,
+#comida-container {
+  display: flex;
+  justify-content: space-around;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.icon-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #2A2A2A;
+  color: #00BFFF;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  width: 72px;
+  height: 72px;
+  font-size: 1.3em;
+  transition: background-color 0.3s ease;
+  position: relative; /* para badges */
+}
+
+.icon-button span {
+  font-size: 0.7em;
+  margin-top: 4px;
+  color: #BBB;
+}
+
+.fas.fa-calendar { font-size: 1.4em; color: #00BFFF; margin-left: 20px; }
+#botonCalendario i.fa-calendar { margin-left: 10px; font-size: 1.3em; }
+
+/* ================== 📱 RESPONSIVE GENERAL ================== */
+@media (max-width: 600px) {
+  .header-date { font-size: 1.2em; }
+  .icon-button { width: 70px; height: 70px; }
+}
+
+/* =======================================
+   ✨ FORMULARIOS - MEJORAS DE ESTILO
+   ======================================= */
+.oculto { display: none !important; }
+
+form input[type="text"],
+form input[type="number"],
+form select,
+form textarea {
+  width: 100%;
+  padding: 10px;
+  margin-top: 4px;
+  margin-bottom: 10px;
+  border: none;
+  border-radius: 10px;
+  background-color: #ffffff;
+  color: #222;
+  font-size: 1em;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-sizing: border-box;
+}
+
+/* Inputs de fecha y hora compactos */
+form input[type="date"],
+form input[type="time"] {
+  width: auto;
+  max-width: 180px;
+  display: inline-block;
+  vertical-align: middle;
+  padding: 10px;
+  margin-top: 4px;
+  margin-bottom: 10px;
+  border: none;
+  border-radius: 10px;
+  background-color: #ffffff;
+  color: #222;
+  font-size: 1em;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-sizing: border-box;
+}
+
+form input:focus,
+form select:focus,
+form textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #00BFFF;
+  background-color: #fff;
+}
+
+.form-group { margin-bottom: 15px; }
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+  color: #BBBBBB;
+}
+
+/* Select */
+form select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23222222%22%20d%3D%22M287%2C114.7L158.1%2C243.6c-5.1%2C5.1-13.3%2C5.1-18.4%2C0L5.4%2C114.7c-5.1-5.1-5.1-13.3%2C0-18.4c5.1-5.1%2C13.3-5.1%2C18.4%2C0l124.9%2C124.9L268.6%2C96.3c5.1-5.1%2C13.3-5.1%2C18.4%2C0C292.1%2C101.4%2C292.1%2C109.6%2C287%2C114.7z%22%2F%3E%3C%2Fsvg%3E');
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
+}
+
+.form-row .flex-item {
+  flex: 1;
+  min-width: 150px;
+  margin-bottom: 0;
+}
+.form-row .flex-item label { display: block; margin-bottom: 5px; }
+.form-row .flex-item input[type="date"],
+.form-row .flex-item input[type="time"] { width: 100%; max-width: none; }
+
+/* === Formulario Editar Cita (grid) === */
+#editar-formulario {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas:
+    "description description"
+    "date        times"
+    "req-input   times"
+    "req-list    req-list"
+    "buttons     buttons";
+  gap: 15px;
+  max-width: 500px;
+  margin: 0 auto;
+  padding-bottom: 20px;
+}
+#editar-formulario #description-group { grid-area: description; }
+#editar-formulario #date-group { grid-area: date; }
+#editar-formulario #time-row {
+  grid-area: times;
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+#editar-formulario #requirements-label-input-group { margin-bottom: 8px; }
+#editar-formulario #requirements-list-and-button-area {
+  grid-area: req-list;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+#editar-formulario #requisitos-container {
+  flex-grow: 1;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background-color: #2A2A2A;
+  min-height: 40px;
+}
+#editar-formulario #añadir-requisito { flex-shrink: 0; margin-top: 0; }
+#editar-formulario .form-buttons { grid-area: buttons; margin-top: 10px; }
+#editar-formulario .form-group { margin-bottom: 0; }
+#editar-formulario .form-row .flex-item input[type="date"],
+#editar-formulario .form-row .flex-item input[type="time"] { width: 100%; max-width: none; }
+
+/* === Rutinas: días === */
+.dias-semana-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.dias-fila { display: flex; gap: 10px; justify-content: center; }
+.dias-fila label {
+  background-color: #cceaff;
+  padding: 6px 12px;
+  border-radius: 50px;
+  font-weight: bold;
+  text-align: center;
+  color: black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 40px;
+  cursor: pointer;
+}
+
+/* === Lista de requisitos genérica === */
+.requirements-list {
+  margin-top: 10px;
+  margin-bottom: 15px;
+  padding: 10px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background-color: #2A2A2A;
+  min-height: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: center;
+}
+.requirement-item {
+  background-color: #3A3A3A;
+  color: #E0E0E0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9em;
+}
+.requirement-item .remove-requirement {
+  background: none;
+  border: none;
+  color: #FF4B5C;
+  cursor: pointer;
+  font-size: 1.1em;
+  margin-left: 10px;
+}
+
+/* Grupo input/botón requisitos */
+.add-requirement-input { display: flex; gap: 10px; margin-top: 0; flex-wrap: wrap; }
+.add-requirement-input input[type="text"] { flex-grow: 1; min-width: 150px; margin-bottom: 0; }
+.add-requirement-input button { flex-shrink: 0; margin-bottom: 0; }
+
+/* === Botones === */
+.btn-primary,
+.btn-success,
+.btn-cancel,
+.btn-secondary {
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 1em;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  align-items: center;
+}
+.btn-success { background-color: #00D27F; color: #121212; }
+.btn-success:hover { background-color: #00B06A; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3); }
+.btn-cancel { background-color: #FF4B5C; color: #FFFFFF; }
+.btn-cancel:hover { background-color: #E03A4B; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.3); }
+.btn-secondary { background-color: #00BFFF; color: #FFFFFF; padding: 10px 15px; font-size: 0.9em; border-radius: 8px; }
+.btn-secondary:hover { background-color: #0090cc; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.25); }
+
+.form-buttons { display: flex; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
+.form-buttons button { flex: 1; min-width: 120px; }
+
+/* === Añadir Actividad === */
+.activity-type-buttons { margin-bottom: 20px; }
+.add-requirement-input select,
+.add-requirement-input input[type="number"] {
+  max-width: 100px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.add-requirement-input select.select-full-width { max-width: none; flex-grow: 1; }
+#form-nueva-actividad { display: flex; flex-direction: column; gap: 15px; padding: 10px 0; }
+
+/* === Botón Ver más === */
+.btn-ver-mas {
+  margin-top: 10px;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #ff4d4d;
+  border: none;
+  padding: 8px 16px;
+  font-size: 0.9em;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-ver-mas i { color: #ff4d4d; }
+.ver-mas-container { text-align: center; margin-top: 10px; }
+.btn-ver-mas:hover { background-color: rgba(255, 255, 255, 0.1); transform: scale(1.05); }
+
+/* === Inputs y grids === */
+input[type="text"],
+input[type="date"],
+input[type="time"],
+select,
+textarea {
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-grid-2cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Los campos ocupan bien su celda de la grilla */
+.form-grid-2cols input[type="date"],
+.form-grid-2cols input[type="time"],
+.form-grid-2cols input[type="text"],
+.form-grid-2cols select,
+.form-grid-2cols textarea {
+  width: 100%;
+  max-width: none;
+}
+
+/* Mantener 2 columnas también en móvil común */
+@media (max-width: 600px) {
+  .form-grid-2cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Solo en pantallas MUY estrechas (≤360px) apila a 1 columna */
+@media (max-width: 360px) {
+  .form-grid-2cols { grid-template-columns: 1fr; }
+}
+
+
+.form-grid-3cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+@media (max-width: 700px) { .form-grid-3cols { grid-template-columns: 1fr 1fr 1fr; gap: 10px; } }
+
+.checkbox-group {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding: 8px 0;
+}
+.checkbox-group label {
+  min-width: 100px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.requisitos-flex { display: flex; align-items: center; gap: 10px; }
+
+/* === Totales receta === */
+.totales-receta {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #1f1f1f;
+  border-radius: 10px;
+  text-align: center;
+  color: #ffffff;
+}
+.totales-receta p { margin: 0.5rem 0; font-size: 1rem; }
+
+/* === Contenedores y tarjetas === */
+.icon-buttons-container { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+
+/* ejemplo rápido */
+.comida-card {
+  background-color: #1e1e1e;
+  padding: 1rem;
+  border-radius: 15px;  
+  box-shadow: 0 0 10px #00000044;
+}
+.comida-header { display: flex; justify-content: space-between; align-items: center; }
+.comida-header h4 { margin: 0; color: #50fa7b; text-align: center; flex-grow: 1; }
+.check-small { font-size: 1.2rem; padding: 0.2rem 0.4rem; border: none; background: transparent; cursor: pointer; color: white; }
+.toggle-ingredientes { background-color: transparent; border: none; color: #8be9fd; cursor: pointer; margin-top: 0.5rem; font-size: 0.95rem; }
+.lista-ingredientes { margin-top: 0.5rem; padding-left: 1.2rem; }
+.comida-tipo-header { display: flex; justify-content: center; align-items: center; gap: 0.75rem; font-size: 1.2rem; }
+.titulo-comida { font-weight: bold; color: #d0baff; white-space: nowrap; }
+.flecha-roja { background-color: transparent; border: none; font-size: 1.2rem; color: #ff4c4c; cursor: pointer; padding: 0.3rem 0.5rem; transition: transform 0.2s ease; }
+.flecha-roja:hover { transform: scale(1.1); }
+
+/* === Actividad item === */
+.actividad-item {
+  background-color: #1e1e1e;
+  border-radius: 10px;
+  padding: 10px 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-left: 4px solid #00bcd4;
+  color: #fff;
+}
+.actividad-item.actividad-completada { background-color: #2C3E3E; color: #ccffcc; }
+.actividad-item.rutina { border-left-color: #4caf50; }
+.actividad-item.tarea { border-left-color: #ff9800; }
+.actividad-info { display: flex; flex-direction: column; }
+.actividad-hora { font-weight: bold; font-size: 0.9rem; }
+.actividad-tiempo { font-size: 0.85rem; color: #a8e6cf; }
+.actividad-descripcion { margin-top: 2px; }
+.actividad-actions { display: flex; gap: 1px; margin-top: 8px; }
+
+/* === Botones redondos === */
+.circle-btn {
+  display: inline-block;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  text-align: center;
+  line-height: 32px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+}
+.green { background-color: #2ecc71; }
+.yellow { background-color: #f1c40f; }
+.red { background-color: #e74c3c; }
+
+/* === Overlay y formularios modales === */
+.form-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+.formulario-edicion {
+  background: #202020;
+  padding: 20px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 0 15px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.formulario-edicion h3 { margin-bottom: 10px; text-align: center; }
+.formulario-edicion label { display: flex; flex-direction: column; font-weight: bold; }
+.formulario-edicion input {
+  padding: 8px; border: 1px solid #ccc; border-radius: 6px; background-color: #333; color: white;
+}
+.form-botones { display: flex; justify-content: space-between; gap: 10px; }
+.form-botones button {
+  padding: 10px; border: none; border-radius: 8px; background: #3498db; color: #fff; font-weight: bold; cursor: pointer;
+}
+.form-botones button#cancelarEdicion { background: #e74c3c; }
+
+/* === CITAS (estructura) === */
+.cita-item {
+  background-color: #1E1E1E;
+  border-left: 4px solid #00BFFF;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+}
+.cita-main-content { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; }
+.cita-aside-content { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+.cita-aside-content .cita-fecha { font-size: 0.9em; font-weight: 500; color: #ccc; white-space: nowrap; }
+.cita-aside-content .cita-actions {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; justify-items: center; align-items: center; max-width: 72px; padding: 4px 0;
+}
+.btn-action {
+  display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  border: none; border-radius: 50%; cursor: pointer; background-color: #333; color: #fff; font-size: 1em;
+  transition: background-color 0.2s ease; flex-shrink: 0;
+}
+.btn-action.btn-complete { background-color: #28a745; }
+.btn-action.btn-complete.completed { background-color: #1a7a32; }
+.btn-action.btn-edit { background-color: #007bff; }
+.btn-action.btn-delete { background-color: #dc3545; }
+.btn-action:hover { filter: brightness(1.2); }
+.cita-hora { font-weight: bold; color: #f1f1f1; }
+
+/* === Badges en icon buttons === */
+.badge-lista {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background-color: rgb(59, 0, 0);
+  color: black;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: bold;
+  z-index: 1;
+}
+
+/* === Botón registrar pequeño === */
+.btn-register {
+  background-color: #d86800de;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  margin: 2px;
+}
+.btn-action i,
+.btn-register i { font-size: 14px; display: block; margin: 0 auto; }
+
+/* === Modales genéricos === */
+.form-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+.form-editar-cita {
+  background-color: #222;
+  padding: 20px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  color: white;
+  box-shadow: 0 0 10px rgba(0,0,0,0.8);
+}
+.form-editar-cita input {
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  background-color: #333;
+  color: white;
+}
+.form-editar-cita label { display: block; margin-bottom: 4px; font-size: 0.9em; color: #ccc; }
+.form-editar-cita .form-buttons { margin-top: 16px; display: flex; justify-content: space-between; gap: 10px; }
+.form-editar-cita .btn-success,
+.form-editar-cita .btn-cancel,
+.form-editar-cita .btn-secondary { flex: 1; padding: 10px; border: none; border-radius: 6px; cursor: pointer; }
+.form-editar-cita .btn-success { background-color: #4caf50; color: white; }
+.form-editar-cita .btn-cancel { background-color: #e53935; color: white; }
+.form-editar-cita .btn-secondary { background-color: #1976d2; color: white; margin-top: 8px; }
+.form-editar-cita .requirements-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.form-editar-cita h3 { margin-top: 0; margin-bottom: 16px; font-size: 1.2em; text-align: center; color: white; }
+
+/* === Ajustes botón tipo de actividad en móvil === */
+@media (max-width: 480px) {
+  .activity-type-buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 2px;
+    flex-wrap: nowrap;
+    font-size: 2em;
+  }
+  .activity-type-buttons .icon-button {
+    flex: 1 1 0;
+    padding: 6px;
+    font-size: 16px;
+  }
+  .activity-type-buttons .icon-button i { font-size: 1.4em; }
+  .activity-type-buttons .icon-button span { font-size: 10px; }
+}
+
+/* === Badge notas === */
+.badge-nota {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background-color: rgb(17, 0, 110);
+  color: rgb(0, 0, 0);
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 50%;
+  line-height: 1;
+  min-width: 16px;
+  text-align: center;
+  font-weight: bold;
+}
+
+/* === Formularios ancho en móvil === */
+@media (max-width: 600px) {
+  #form-nueva-actividad {
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+}
+
+/* (evita duplicados) */
+#form-nueva-actividad { width: 100%; max-width: 420px; margin: 0 auto; }
+.activity-type-buttons { flex-wrap: nowrap; justify-content: space-between; gap: 2px; }
+.activity-type-buttons .icon-button { flex: 1; padding: 8px 4px; }
+
+/* === Carrusel === */
+.carousel-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.carousel-arrow {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  padding: 10px;
+  cursor: pointer;
+  z-index: 2;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  text-align: center;
+}
+.carousel-arrow.left { left: 0; }
+.carousel-arrow.right { right: 0; }
+
+.carousel-container {
+  display: flex;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  gap: 8px;
+  padding: 10px 0;
+  flex-grow: 1;
+  margin-left: 40px;
+  margin-right: 40px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.carousel-container::-webkit-scrollbar { display: none; }
+
+.icon-buttons-container {
+  display: flex;
+  overflow-x: auto;
+  gap: 2px;
+  padding: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  flex-shrink: 0;
+}
+.icon-buttons-container::-webkit-scrollbar { display: none; }
+
+/* === Acciones pequeñas en móvil === */
+@media (max-width: 480px) {
+  .actividad-actions { gap: 1px; }
+  .circle-btn { width: 28px; height: 28px; font-size: 13px; }
+}
+
+/* === Correcciones específicas SOLO para móvil (evitar “ancho máximo” en desktop) === */
+@media (max-width: 600px) {
+  body, html { overflow-x: hidden; width: 100%; }
+  main, .wrapper, section.main-section {
+    max-width: 100vw;
+    width: 100%;
+     margin: 0 auto 10px auto; /* añade margen inferior */
+
+    padding: 10px;
+    box-sizing: border-box;
+  }
+  .carousel-container,
+  .icon-buttons-container,
+  .activity-type-buttons {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .icon-button { min-width: 44px; flex-shrink: 0; }
+  input, select, textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
+  #modalConfirmYes, #modalConfirmNo { display: none !important; }
+}
+
+/* ==========================================================
+   HEADER / USUARIO — ICONOS ARRIBA — NOMBRE SIEMPRE ABAJO
+   ========================================================== */
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  position: relative;
+
+  /* igual que section.main-section */
+  width: calc(100% - 30px);
+  max-width: 480px;
+  margin: 10px auto 0;
+  padding: 0 15px;           /* margen interior simétrico */
+  box-sizing: border-box;
+}
+
+/* Separar icono y nombre como hermanos en el flex del header */
+#usuario-activo { display: contents !important; }
+
+/* Icono de usuario: fila 1, a la derecha */
+#usuario-menu-btn {
+  order: 1;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Nombre: siempre fila 2, centrado y a todo lo ancho */
+#nombre-usuario {
+  order: 999;
+  flex: 0 0 100%;
+  min-width: 100%;
+  width: 100%;
+  display: inline-block;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 4px;
+
+  /* 🎯 Estilo futurista */
+  padding: 6px 12px;
+  border: 2px solid #00FFD0; /* borde neón */
+  border-radius: 8px;
+  background: rgba(0, 255, 208, 0.1);
+  font-family: 'Orbitron', sans-serif; /* fuente futurista */
+  font-size: 18px;
+  font-weight: bold;
+  color: #00FFD0; /* color de letra */
+  box-shadow: 0 0 8px rgba(0, 255, 208, 0.7);
+  transition: all 0.1s ease-in-out;
+  padding-left: 15px; /* mantiene simetría con el header */
+  padding-right: 15px;
+}
+
+#nombre-usuario:hover {
+  background: rgba(0, 255, 208, 0.2);
+  transform: scale(1.05);
+}
+/* Menú desplegable */
+#menu-usuario {
+  position: absolute;
+  top: 50px;
+  right: 15px;
+}
+
+/* ===== Chip del PERFIL (sin calendario) ===== */
+:root{
+  --hdr-chip-size: 44px;     /* ajusta tamaño global del chip */
+  --hdr-chip-radius: 12px;   /* redondeo del chip */
+  --hdr-blue: #00BFFF;       /* azul del tema */
+  --hdr-blue-dark: #00a8d6;  /* borde */
+}
+
+/* Botón de perfil (chip azul) */
+#usuario-menu-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hdr-chip-size);
+  height: var(--hdr-chip-size);
+  padding: 0;
+  border-radius: var(--hdr-chip-radius);
+  background-color: var(--hdr-blue);
+  border: 1px solid var(--hdr-blue-dark);
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* Círculo blanco interior */
+#usuario-menu-btn::after{
+  content: "";
+  position: absolute;
+  inset: 7px;               /* controla el grosor del aro azul */
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* Icono (muñeco) azul sobre el círculo blanco */
+#usuario-menu-btn i{
+  position: relative;
+  z-index: 1;
+  font-size: 20px;          /* mismo tamaño que el del calendario */
+  color: var(--hdr-blue);
+}
+
+
+/* === Requisitos en desplegable con flechita SIEMPRE visible === */
+.requisitos-accordion { margin-top: 6px; }
+
+.requisitos-accordion summary {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.92em;
+  color: #8be9fd;
+  padding: 4px 0;
+  list-style: none;           /* oculta el marcador nativo */
+  -webkit-appearance: none;   /* refuerzo */
+  appearance: none;
+}
+
+.requisitos-accordion summary::-webkit-details-marker { display: none; }
+
+/* Flechita hecha con bordes (caret robusto) */
+.requisitos-accordion summary::after {
+  content: "";
+  display: inline-block;
+  width: 0; height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid currentColor;  /* usa el color del texto */
+  opacity: 0.9;
+  transition: transform 0.2s ease;
+  margin-left: 4px;
+}
+
+/* Al abrir, gira 180º */
+.requisitos-accordion[open] summary::after {
+  transform: rotate(180deg);
+}
+
+/* Contenido del panel */
+.requisitos-accordion .requirements-list {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background-color: #2A2A2A;
+}
+
+/* FIX: checkboxes de requisitos en móvil */
+@media (max-width: 600px) {
+  .cita-requisitos { display: flex; flex-direction: column; gap: 6px; }
+
+  .requisito-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-start;   /* nada de separarlo a los lados */
+    width: auto;
+  }
+
+  /* El checkbox no debe ocupar todo el ancho y va detrás del texto */
+  .requisito-checkbox input[type="checkbox"] {
+    width: auto !important;
+    flex: 0 0 auto;
+    margin: 0;
+    order: 2;   /* checkbox a la derecha del texto */
+  }
+  .requisito-checkbox span { order: 1; }
+}
+
+.activity-type-buttons { flex-wrap: nowrap; justify-content: space-between; gap: 2px; }
+.activity-type-buttons .icon-button { flex: 1; padding: 8px 4px; }
+@media (max-width: 480px) {
+  .activity-type-buttons .icon-button i { font-size: 1.4em; }
+  .activity-type-buttons .icon-button span { font-size: 10px; }
+}
+
+
+/* Quitar fondo/blanco de los botones en Agenda de Hoy */
+.actividad-actions button {
+  background: transparent !important;
+  border: none;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Foco accesible sin caja blanca */
+.actividad-actions button:focus-visible {
+  outline: 2px solid #00BFFF;
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+/* Por si están deshabilitados */
+.actividad-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  outline: none;
+}
+
+/* Separación mínima entre los botones de acciones */
+.actividad-actions { 
+  gap: 6px !important;     /* ajústalo a tu gusto */
+}
+
+/* En móvil, un pelín menos para no comer espacio */
+@media (max-width: 480px) {
+  .actividad-actions { 
+    gap: 4px !important;
+  }
+}
+
+/* Botón largo de Administración */
+#admin-acceso { margin-top: 10px; }
+
+.btn-admin-wide{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+
+  background-color: #2A2A2A;
+  border: 1px solid #3a3a3a;
+
+  color: #FFFFFF;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: .3px;
+
+  box-shadow: 0 4px 12px rgba(0,0,0,.35);
+  transition: transform .15s ease, filter .15s ease, box-shadow .15s ease;
+}
+
+.btn-admin-wide i{ font-size: 1.1em; line-height: 1; }
+
+.btn-admin-wide:hover{
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 6px 16px rgba(0,0,0,.45);
+}
+
+.btn-admin-wide:active{ transform: translateY(0); }
+
+.btn-admin-wide:focus-visible{
+  outline: 2px solid #00BFFF;
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+
+/* En móvil, un pelín más grande */
+@media (max-width: 600px){
+  #admin-acceso .btn-admin-wide{ padding: 16px; font-size: 1.02rem; }
+}
+
+/* Tareas de documentos en Agenda de hoy */
+.actividad-item.actividad-doc{
+  background:#131822; border:1px solid #242938; border-radius:12px;
+}
+.actividad-item.actividad-doc.estado-soon{   /* ≤30 días */
+  background:#1f1a0f; border-color:#5b4f1f;
+}
+.actividad-item.actividad-doc.estado-today{  /* caduca hoy */
+  background:#2b1a1a; border-color:#7a2a2a;
+}
+.actividad-item.actividad-doc.estado-expired{ /* caducado */
+  background:#2a1717; border-color:#5b1f1f;
+}
+
+/* Tareas completadas: fondo/borde verde */
+.actividad-item.actividad-completada{
+  background: #0f2a1f;           /* verde oscuro sutil */
+  border-color: #1f6d54;
+}
+
+/* Si es tarea de documento y está completada, también verde (override) */
+.actividad-item.actividad-doc.actividad-completada{
+  background: #0f2a1f;
+  border-color: #1f6d54;
+}
+
+/* (Opcional) texto un pelín más claro para destacarlo */
+.actividad-item.actividad-completada .actividad-descripcion{
+  color: #baf7d3;
+}
+
+/* Resaltar la cuenta atrás en Agenda de hoy */
+.doc-countdown {
+  font-weight: 800;
+  letter-spacing: .2px;
+  color: #ffd166;             /* AMARILLO por defecto */
+}
+
+/* Si el doc está cerca/expira hoy/caducado: ROJO */
+.doc-countdown { font-weight:800; letter-spacing:.2px; color:#ffd166; }
+.actividad-item.actividad-doc.estado-soon  .doc-countdown,
+.actividad-item.actividad-doc.estado-today .doc-countdown,
+.actividad-item.actividad-doc.estado-expired .doc-countdown { color:#ff6b6b; }
+
+.mini-player{
+  position: fixed; top: 12px; right: 12px; z-index: 50;
+  display: none; align-items: center; gap: 8px;
+  background: rgba(17,24,39,.85);
+  border: 1px solid rgba(255,255,255,.08);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+  padding: 6px 10px; border-radius: 9999px;
+  transition: opacity .2s ease, transform .2s ease;
+  opacity: .9;
+}
+.mini-player.show{ display:flex; }
+.mini-player:hover{ opacity: 1; }
+.mp-btn{
+  width: 32px; height: 32px; border-radius: 9999px;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.mini-title{
+  max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: #e5e7eb; font-size: .9rem;
+}
+@media (max-width: 480px){ .mini-title{ max-width: 140px; } }
+
+/* Actividades de documentos */
+.actividad-item.actividad-doc { border-left: 4px solid #4b5563; }
+.actividad-item.actividad-doc.estado-soon { border-left-color: #f59e0b; background: rgba(245,158,11,.08); }
+.actividad-item.actividad-doc.estado-today { border-left-color: #ef4444; background: rgba(239,68,68,.10); }
+.actividad-item.actividad-doc.estado-expired { border-left-color: #991b1b; background: rgba(153,27,27,.12); }
+
+/* Resalte del texto “(quedan X días) / CADUCA HOY / CADUCADO” */
+.doc-countdown { font-weight: 700; color: #ffd166; }
+.actividad-item.actividad-doc.estado-today .doc-countdown { color: #ff6b6b; }
+.actividad-item.actividad-doc.estado-expired .doc-countdown { color: #ff3b3b; }
+
+/* Base */
+.actividad-item {
+  border-left: 6px solid transparent;
+  padding-left: 10px;
+}
+
+/* Chips */
+.actividad-chip {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 9999px;
+  margin-right: 6px;
+  vertical-align: middle;
+  user-select: none;
+}
+
+/* Paleta por subtipo */
+.subtipo-tarea     { --ac: #8b5cf6; } /* violeta */
+.subtipo-requisito { --ac: #3b82f6; } /* azul    */
+.subtipo-mejora    { --ac: #16a34a; } /* verde   */
+.subtipo-documento { --ac: #f59e0b; } /* ámbar   */
+.subtipo-rutina    { --ac: #64748b; } /* slate   */
+
+/* Aplica color a borde y chip según subtipo */
+.subtipo-tarea,
+.subtipo-requisito,
+.subtipo-mejora,
+.subtipo-documento,
+.subtipo-rutina {
+  border-left-color: var(--ac) !important;
+}
+
+.actividad-chip.subtipo-tarea,
+.actividad-chip.subtipo-requisito,
+.actividad-chip.subtipo-mejora,
+.actividad-chip.subtipo-documento,
+.actividad-chip.subtipo-rutina {
+  background: color-mix(in srgb, var(--ac) 20%, transparent);
+  border: 1px solid var(--ac);
+  color: var(--ac);
+}
+
+/* Mantén tus estilos existentes para documentos según caducidad */
+.actividad-item.actividad-doc.estado-expired  { /* ya los tienes */ }
+.actividad-item.actividad-doc.estado-today    { /* ya los tienes */ }
+.actividad-item.actividad-doc.estado-soon     { /* ya los tienes */ }
+
+/* Si una actividad está completada, baja la saturación */
+.actividad-item.actividad-completada {
+  opacity: .7;
+  filter: saturate(.8);
+}
+
+/* Latido para actividades que empiezan en <15 min */
+@keyframes pulse-shadow {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 223, 0, 0.75); }
+  70%  { box-shadow: 0 0 0 12px rgba(255, 223, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 223, 0, 0); }
+}
+
+.actividad-item.latido {
+  animation: pulse-shadow 1.5s ease-out infinite;
+  position: relative;             /* por si tu layout lo necesita */
+}
+
+/* Si está completada, no late */
+.actividad-item.actividad-completada.latido {
+  animation: none;
+  box-shadow: none;
+}
+
+.actividad-encurso {
+  border: 2px dashed #aa0000; /* rojo oscuro gótico */
+  background-color: rgba(40, 0, 0, 0.6); /* fondo rojo oscuro semitransparente */
+  color: #f5f0e1; /* tono pergamino */
+  font-family: 'Cinzel', serif;
+  box-shadow: 0 0 10px rgba(170, 0, 0, 0.7); /* brillo rojo alrededor */
+  animation: pulso-encurso 1.5s infinite;
+}
+
+@keyframes pulso-encurso {
+  0%   { box-shadow: 0 0 5px rgba(170, 0, 0, 0.4); }
+  50%  { box-shadow: 0 0 15px rgba(170, 0, 0, 0.8); }
+  100% { box-shadow: 0 0 5px rgba(170, 0, 0, 0.4); }
+}
+
+/* Estado URGENTE: < 24h */
+/* Fuente monoespaciada recomendada (opcional): */
+/* @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&display=swap'); */
+
+.cita-tiempo-restante {
+  display: inline-block;
+  padding: 4px 10px;
+  line-height: 1;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  letter-spacing: 1px;
+}
+
+/* URGENTE: < 24h  — números huecos con neón frío */
+.cita-item.urgente .cita-tiempo-restante,
+.cita-main-content.urgente .cita-tiempo-restante {
+  font-size: clamp(1.15rem, 3.6vw, 2rem);
+  font-weight: 900;
+  color: transparent;                     /* hueco */
+  -webkit-text-stroke: 2px #00e5ff;       /* contorno cian */
+  text-shadow: 0 0 10px rgba(0, 229, 255, .6);
+  position: relative;
+}
+
+/* Línea de escaneo bajo el texto */
+.cita-item.urgente .cita-tiempo-restante::after,
+.cita-main-content.urgente .cita-tiempo-restante::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  bottom: -6px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, rgba(0,229,255,.9), transparent);
+  filter: drop-shadow(0 0 6px rgba(0,229,255,.8));
+  animation: scanline 1.8s linear infinite;
+}
+
+@keyframes scanline {
+  0%   { transform: translateX(-30%); opacity: .7; }
+  50%  { opacity: 1; }
+  100% { transform: translateX(30%);  opacity: .7; }
+}
+
+/* CRÍTICA: < 1h — cambia a ámbar y vibra suave */
+.cita-item.critica .cita-tiempo-restante,
+.cita-main-content.critica .cita-tiempo-restante {
+  -webkit-text-stroke: 3px #ffb300;       /* contorno ámbar */
+  text-shadow: 0 0 12px rgba(255, 179, 0, .85);
+  font-size: clamp(1.35rem, 4.8vw, 2.4rem);
+  animation: wobble .8s ease-in-out infinite;
+}
+
+.cita-item.critica .cita-tiempo-restante::after,
+.cita-main-content.critica .cita-tiempo-restante::after {
+  background: linear-gradient(90deg, transparent, rgba(255,179,0,.95), transparent);
+  filter: drop-shadow(0 0 8px rgba(255,179,0,.9));
+}
+
+@keyframes wobble {
+  0%,100% { transform: translateY(0) }
+  50%     { transform: translateY(-1px) }
+}
+
+/* Toque sutil al contenedor cuando es urgente/critica (sin caja roja) */
+/* Quitar la sombra interior actual */
+.cita-item.urgente, .cita-main-content.urgente {
+  box-shadow: none;
+}.cita-item.critica, .cita-main-content.critica { box-shadow: inset 0 0 14px rgba(255, 179, 0, .18); }
+
+.cita-item.urgente {
+  border: 2px solid rgba(0,229,255,.6);
+  box-shadow: 0 0 12px rgba(0,229,255,.6),
+              0 0 20px rgba(0,229,255,.3);
+  border-radius: 12px;
+}
+
+/* CRÍTICA < 1h — halo exterior ámbar */
+.cita-item.critica {
+  border: 2px solid rgba(255,179,0,.8);
+  box-shadow: 0 0 14px rgba(255,179,0,.85),
+              0 0 26px rgba(255,179,0,.4);
+  border-radius: 12px;
+}
+
+.draggable-task { cursor: grab; }
+.draggable-task.dragging { opacity: .6; cursor: grabbing; }
+.drag-placeholder {
+  height: 48px;
+  margin: 6px 0;
+  border-radius: 12px;
+  outline: 2px dashed rgba(0, 229, 255, .6);
+  background: rgba(0, 229, 255, .08);
+}
+
+/* toast */
+.toast-sys {
+  position: fixed;
+  left: 50%;
+  top: 20px;
+  transform: translateX(-50%) translateY(-10px);
+  background: #121212;
+  color: #eaeaea;
+  padding: 10px 16px;
+  border-radius: 10px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.35);
+  border: 1px solid rgba(0,229,255,.4);
+  opacity: 0;
+  transition: all .18s ease;
+  z-index: 9999;
+  font-weight: 700;
+  letter-spacing: .3px;
+}
+.toast-sys.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

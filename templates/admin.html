@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <title>Administración</title>
+
+  <!-- Estilos admin -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+
+  <!-- Iconos -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+  <!-- Header compacto -->
+  <header class="admin-header">
+    <a href="{{ url_for('serve_index') }}" class="admin-back">
+      <i class="fas fa-arrow-left"></i><span>Volver</span>
+    </a>
+    <h1>Administración</h1>
+  </header>
+
+  <main class="admin-container">
+    <!-- ===== Sección: Alimentación / Gestión rápida ===== -->
+    <section class="admin-section" id="admin-alimentacion-formularios">
+      <h2>Gestión rápida</h2>
+      <div class="admin-card">
+
+        <!-- Botones para alternar -->
+        <div class="activity-type-buttons" style="justify-content:center; gap:12px;">
+          <button class="icon-button" data-type="Ingrediente" id="btn-ingrediente-actividad" type="button">
+            <i class="fas fa-carrot"></i><span>Ingrediente</span>
+          </button>
+          <button class="icon-button" data-type="Receta" id="btn-receta-actividad" type="button">
+            <i class="fas fa-utensils"></i><span>Receta</span>
+          </button>
+          <!-- NUEVO: Música -->
+          <button class="icon-button" data-type="Musica" id="btn-musica-actividad" type="button">
+            <i class="fas fa-music" style="color:#ff4d4d"></i><span>Música</span>
+          </button>
+        </div>
+
+        <div class="section-content" id="form-nueva-actividad">
+          <form id="nueva-actividad-formulario">
+            <!-- Nombre / descripción -->
+            <div id="grupo-nombre-descripcion" class="oculto">
+              <div class="form-group">
+                <label for="nueva-actividad-descripcion">Nombre / descripción</label>
+                <input id="nueva-actividad-descripcion" type="text" placeholder="Escribe el nombre..." autocomplete="off" />
+              </div>
+            </div>
+
+            <div id="formularios-actividad" class="oculto">
+              <!-- Form INGREDIENTE -->
+              <div class="tipo-formulario oculto" id="form-ingrediente">
+                <div class="form-grid-3cols">
+                  <div class="form-group">
+                    <label for="ingrediente-supermercado">Supermercado:</label>
+                    <select id="ingrediente-supermercado">
+                      <option value="Lidl">Lidl</option>
+                      <option value="Mercadona">Mercadona</option>
+                      <option value="Carrefour">Carrefour</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="ingrediente-precio">Precio:</label>
+                    <input id="ingrediente-precio" type="number" step="0.01" />
+                  </div>
+                  <div class="form-group">
+                    <label for="ingrediente-cantidad">Cantidad:</label>
+                    <input id="ingrediente-cantidad" type="number" step="0.01" />
+                  </div>
+                </div>
+
+                <div class="form-grid-3cols">
+                  <div class="form-group">
+                    <label for="ingrediente-unidad">Unidad:</label>
+                    <select id="ingrediente-unidad">
+                      <option value="g">g</option>
+                      <option value="ml">ml</option>
+                      <option value="unidad">unidad</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="ingrediente-calorias">Calorías:</label>
+                    <input id="ingrediente-calorias" type="number" />
+                  </div>
+                  <div class="form-group">
+                    <label for="ingrediente-proteinas">Proteínas:</label>
+                    <input id="ingrediente-proteinas" type="number" step="0.1" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Form RECETA -->
+              <div class="tipo-formulario oculto" id="form-receta">
+                <div class="form-group">
+                  <label for="receta-instrucciones">Instrucciones:</label>
+                  <textarea id="receta-instrucciones" name="receta_instrucciones" placeholder="Pasos para preparar la receta..." rows="5"></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label>Ingredientes de la Receta:</label>
+                  <div class="requirements-list" id="receta-ingredientes-container"></div>
+                  <div class="add-requirement-input">
+                    <select class="select-full-width" id="receta-seleccionar-ingrediente">
+                      <option value="">Selecciona un ingrediente</option>
+                    </select>
+                    <input id="receta-cantidad-ingrediente" placeholder="Cantidad" step="0.01" type="number"/>
+                    <select id="receta-unidad-ingrediente">
+                      <option value="g">g</option>
+                      <option value="ml">ml</option>
+                      <option value="unidad">unidad</option>
+                    </select>
+                    <button class="btn-secondary" id="btn-añadir-ingrediente-receta" type="button">Añadir Ingrediente</button>
+                  </div>
+                </div>
+
+                <div id="totales-receta" style="margin-top: 10px;">
+                  <p><strong>Precio total:</strong> <span id="total-precio">0.00</span> €</p>
+                  <p><strong>Calorías totales:</strong> <span id="total-calorias">0</span> kcal</p>
+                  <p><strong>Proteínas totales:</strong> <span id="total-proteinas">0</span> g</p>
+                </div>
+              </div>
+
+              <!-- NUEVO: Form MÚSICA -->
+              <div class="tipo-formulario oculto" id="form-musica">
+                <div class="form-group">
+                  <label>Subir canciones</label>
+                  <input id="musica-archivo-multiple" type="file" accept="audio/*" multiple />
+                  <div class="form-text">Formato recomendado: <em>Artista - Título.mp3</em></div>
+                </div>
+
+                <div class="form-group">
+                  <label>Título (opcional si subes solo 1)</label>
+                  <input id="musica-titulo-opcional" type="text" placeholder="Si subes una sola, puedes forzar aquí el título" />
+                </div>
+
+                <div class="form-buttons">
+                  <button class="btn-success" id="btn-subir-musica" type="button">Subir música</button>
+                  <button class="btn-cancel" id="btn-cancelar-musica" type="button">Cancelar</button>
+                </div>
+
+                <div id="musica-resultado" class="form-text" style="margin-top:8px;"></div>
+              </div>
+              <!-- FIN Form MÚSICA -->
+            </div>
+
+            <!-- Botonera general (no se usa en música) -->
+            <div class="form-buttons oculto" id="botones-actividad">
+              <button class="btn-success btn-large" id="btn-guardar-actividad" type="submit">Guardar</button>
+              <button class="btn-cancel" id="cancelar-nueva-actividad" type="button">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ===== Sección: Accesos de alimentación ===== -->
+    <section class="admin-section" id="admin-alimentacion-accesos">
+      <h2>Accesos de alimentación</h2>
+      <div class="admin-card">
+        <div class="admin-actions">
+          <a class="admin-btn" href="/menu">
+            <i class="fas fa-calendar-week"></i><span>Menú</span>
+          </a>
+          <a class="admin-btn" href="/despensa">
+            <i class="fas fa-basket-shopping"></i><span>Despensa</span>
+          </a>
+          <a class="admin-btn" href="/alimentacion">
+            <i class="fas fa-apple-whole"></i><span>Alimentación</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Sección: Productividad / Mejoras ===== -->
+    <section class="admin-section" id="admin-mejoras-accesos">
+      <h2>Accesos productividad</h2>
+      <div class="admin-card">
+        <div class="admin-actions">
+          <a class="admin-btn" href="{{ url_for('mejoras') }}">
+            <i class="fas fa-wrench"></i><span>Mejoras</span>
+          </a>
+        </div>
+      </div>
+    </section>
+    <!-- ===== Sección: Notificaciones ===== -->
+<section class="admin-section" id="admin-notificaciones">
+  <h2>Notificaciones</h2>
+  <div class="admin-card">
+    <div class="admin-actions">
+      <button class="admin-btn" id="btn-os-subscribe" type="button">
+        <i class="fas fa-bell"></i><span>Suscribirme</span>
+      </button>
+      <button class="admin-btn" id="btn-os-test" type="button">
+        <i class="fas fa-paper-plane"></i><span>Probar local</span>
+      </button>
+      <!-- Añade junto al botón "Suscribirme" en admin -->
+<button class="admin-btn" id="btn-os-unsubscribe" type="button">
+  <i class="fas fa-bell-slash"></i><span>Desuscribirme</span>
+</button>
+<button class="admin-btn" id="btn-os-send-backend" type="button">
+  <i class="fas fa-paper-plane"></i><span>Enviar prueba (backend)</span>
+</button>
+
+    </div>
+    <div id="os-status" class="form-text" style="margin-top:8px;">Estado: —</div>
+  </div>
+</section>
+
+<section class="main-section" id="familia">
+  <h2>Grupo familiar</h2>
+
+  <div class="section-content">
+    <div class="form-grid-2cols">
+      <div class="form-group">
+        <label>Nombre del grupo</label>
+        <input id="grp-nombre" type="text" placeholder="Ej: Familia Raúl">
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <button id="grp-crear" class="btn-success">Crear grupo</button>
+      </div>
+    </div>
+
+    <hr style="opacity:.2;margin:12px 0;">
+
+    <div id="mis-grupos"></div>
+
+    <div id="panel-miembros" class="oculto" style="margin-top:12px;">
+      <h3>Miembros del grupo: <span id="nombre-grupo-actual"></span></h3>
+
+      <div class="form-grid-3cols">
+        <div class="form-group">
+          <label>Usuario (username)</label>
+          <input id="mbr-username" type="text" placeholder="p.ej. derek">
+        </div>
+        <div class="form-group">
+          <label>Rol</label>
+          <select id="mbr-rol">
+            <option value="miembro">Miembro</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>&nbsp;</label>
+          <button id="mbr-agregar" class="btn-secondary">Añadir miembro</button>
+        </div>
+      </div>
+
+      <ul id="lista-miembros"></ul>
+    </div>
+  </div>
+</section>
+
+
+
+  </main>
+
+  <!-- Scripts base -->
+  <script src="{{ url_for('static', filename='js/supabaseClient.js') }}" type="module"></script>
+  <script src="{{ url_for('static', filename='js/recetas.js') }}" type="module"></script>
+  <script src="{{ url_for('static', filename='utils/calculos_ingredientes.js') }}" type="module"></script>
+  <script src="{{ url_for('static', filename='js/add-activity.js') }}" type="module"></script>
+  <script type="module" src="{{ url_for('static', filename='js/admin-groups.js') }}"></script>
+
+
+  <!-- Script NUEVO: lógica de Música (subida múltiple + parse artista/título) -->
+  <script type="module">
+    import { supabase } from "{{ url_for('static', filename='js/supabaseClient.js') }}";
+
+    // === Config ===
+    const BUCKET = 'audios'; // tu bucket de audio en Storage
+    const TABLE  = 'music';  // tu tabla (id, user_id, url, title, artist, ...)
+
+    // === Helpers ===
+    const stripExt = (name) => name.replace(/\.[^/.]+$/, '');
+    const parseFromFilename = (filename) => {
+      const base = stripExt(filename).trim();
+      const parts = base.split(/\s*[-–—]\s*/); // -, – o —
+      if (parts.length >= 2) {
+        return {
+          artist: parts[0].trim() || 'Desconocido',
+          title:  parts.slice(1).join(' - ').trim() || base
+        };
+      }
+      return { artist: 'Desconocido', title: base };
+    };
+    async function getUserId() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) return session.user.id;
+      // si no hay sesión, crea anónima para tener user_id
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error) return null;
+      return data.user.id;
+    }
+
+    // === Refs UI ===
+    const btnMusica = document.getElementById('btn-musica-actividad');
+    const formMusica = document.getElementById('form-musica');
+    const formIngred = document.getElementById('form-ingrediente');
+    const formReceta = document.getElementById('form-receta');
+    const contFormularios = document.getElementById('formularios-actividad');
+    const grupoNombreDesc = document.getElementById('grupo-nombre-descripcion');
+    const botonesActividad = document.getElementById('botones-actividad');
+
+    const inputFiles = document.getElementById('musica-archivo-multiple');
+    const inputTitulo = document.getElementById('musica-titulo-opcional');
+    const btnSubir = document.getElementById('btn-subir-musica');
+    const btnCancelar = document.getElementById('btn-cancelar-musica');
+    const resultado = document.getElementById('musica-resultado');
+
+    // === Mostrar el formulario de Música ===
+    btnMusica?.addEventListener('click', () => {
+      contFormularios?.classList.remove('oculto');
+      // Ocultar otros
+      formIngred?.classList.add('oculto');
+      formReceta?.classList.add('oculto');
+      // Mostrar música
+      formMusica?.classList.remove('oculto');
+      // Ocultar grupos que no aplican
+      grupoNombreDesc?.classList.add('oculto');
+      botonesActividad?.classList.add('oculto');
+      resultado.textContent = '';
+    });
+
+    // === Cancelar música ===
+    btnCancelar?.addEventListener('click', () => {
+      formMusica?.classList.add('oculto');
+      inputFiles.value = '';
+      inputTitulo.value = '';
+      resultado.textContent = '';
+    });
+
+    // === Subida múltiple ===
+    btnSubir?.addEventListener('click', async () => {
+      const files = inputFiles?.files || [];
+      const manualTitle = (inputTitulo?.value || '').trim();
+
+      if (!files.length) {
+        resultado.textContent = '❌ Selecciona uno o más archivos.';
+        return;
+      }
+
+      const userId = await getUserId();
+      if (!userId) {
+        resultado.textContent = '❌ No hay sesión de usuario.';
+        return;
+      }
+
+      btnSubir.disabled = true;
+      btnSubir.textContent = 'Subiendo...';
+      resultado.textContent = '';
+
+      let ok = 0, fail = 0;
+      const rows = [];
+
+      for (const file of files) {
+        try {
+          const path = `${userId}/${Date.now()}_${file.name}`;
+          const up = await supabase.storage.from(BUCKET).upload(path, file);
+          if (up.error) throw up.error;
+
+          const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+          const url = pub.publicUrl;
+
+          // Si solo subes 1 y pones título manual, lo respetamos (y parseamos artista si viene con guion)
+          let artist, title;
+          if (files.length === 1 && manualTitle) {
+            ({ artist, title } = parseFromFilename(`${manualTitle}.mp3`));
+          } else {
+            ({ artist, title } = parseFromFilename(file.name));
+          }
+
+          rows.push({ user_id: userId, url, title, artist });
+          ok++;
+        } catch (err) {
+          console.error('Upload error', err);
+          fail++;
+        }
+      }
+
+      if (rows.length) {
+        const { error } = await supabase.from(TABLE).insert(rows);
+        if (error) {
+          console.error('Insert error', error);
+          resultado.textContent = `⚠️ Subidas OK: ${ok}, errores: ${fail}. (Fallo al guardar en tabla)`;
+        } else {
+          resultado.textContent = `✅ Subidas OK: ${ok}, errores: ${fail}.`;
+        }
+      } else {
+        resultado.textContent = `⚠️ No se pudo subir ningún archivo.`;
+      }
+
+      btnSubir.disabled = false;
+      btnSubir.textContent = 'Subir música';
+      inputFiles.value = '';
+      inputTitulo.value = '';
+    });
+  </script>
+
+<!-- NOTIFICACIONES (ÚNICO BLOQUE) -->
+<script type="module">
+  import { supabase } from "{{ url_for('static', filename='js/supabaseClient.js') }}";
+
+  const APP_ID = "763d5d14-441f-4d1c-b7bd-85ed57fa6f85";
+
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $('os-status');
+  const setStatus = (t) => { if (statusEl) statusEl.textContent = "Estado: " + t; };
+
+  // Carga OneSignal e inicializa (local con allowLocalhost)
+  async function ensureOneSignalReady() {
+    if (!window.OneSignal) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    await new Promise((resolve) => {
+      window.OneSignalDeferred.push(async function (OneSignal) {
+        const isLocal = ['localhost','127.0.0.1'].includes(location.hostname);
+        try {
+          await OneSignal.init({
+            appId: APP_ID,
+            serviceWorkerPath: "/OneSignalSDKWorker.js",
+            serviceWorkerParam: { scope: "/" },
+            ...(isLocal ? { allowLocalhostAsSecureOrigin: true } : {})
+          });
+        } catch {}
+        resolve();
+      });
+    });
+  }
+
+  async function subscribeNow(){
+    try {
+      setStatus("preparando…");
+      await ensureOneSignalReady();
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setStatus("inicia sesión primero"); return; }
+
+      // Permiso + opt-in + login
+      if (Notification.permission !== "granted") {
+        const p = await Notification.requestPermission();
+        if (p !== "granted") { setStatus("permiso denegado"); return; }
+      }
+      await window.OneSignal.User.PushSubscription.optIn();
+      await window.OneSignal.login(user.id);
+
+      const subId = await window.OneSignal.User.PushSubscription.id;
+      setStatus(subId ? ("suscrito ✔︎ subId: " + subId) : "suscrito ✔︎ (sin subId aún)");
+    } catch (e) {
+      console.error("OneSignal subscribe error:", e);
+      setStatus("error al suscribirse (ver consola)");
+    }
+  }
+
+  async function testLocalNotification(){
+    try {
+      if (Notification.permission !== "granted") {
+        const p = await Notification.requestPermission();
+        if (p !== "granted") { setStatus("permiso denegado"); return; }
+      }
+      let reg = null;
+      if ("serviceWorker" in navigator) {
+        reg = await navigator.serviceWorker.getRegistration("/OneSignalSDKWorker.js");
+      }
+      const title = "Prueba desde Admin";
+      const options = { body: "Notificación local OK", icon: "/favicon.ico" };
+      if (reg && reg.showNotification) reg.showNotification(title, options);
+      else new Notification(title, options);
+      setStatus("notificación local enviada");
+    } catch(e){
+      console.error("Test notification error:", e);
+      setStatus("error en prueba local");
+    }
+  }
+
+  async function unsubscribeNow(){
+    try {
+      await window.OneSignal.User.PushSubscription.optOut();
+      await window.OneSignal.logout();
+      setStatus("desuscrito ✔︎");
+    } catch (e) {
+      console.error('Unsubscribe error:', e);
+      setStatus("error al desuscribirse");
+    }
+  }
+
+  // Envío real desde backend usando subscription_id (v1 + include_player_ids)
+ async function sendBackendPush(){
+  try {
+    await ensureOneSignalReady();
+
+    const subId = await window.OneSignal?.User?.PushSubscription?.id;
+    console.log("[Admin] subscription_id:", subId);
+    if (!subId) { setStatus("no hay subscription_id"); return; }
+
+    const response = await fetch("/api/push", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        subscription_id: subId,
+        title: "MiAgenda",
+        body:  "Prueba de push desde backend ✅"
+      })
+    });
+
+    const ct = response.headers.get("content-type") || "";
+    const data = ct.includes("application/json") ? await response.json()
+                                                 : await response.text();
+
+    if (!response.ok) {
+      console.error("[Admin] Backend push error:", data);
+      setStatus("falló envío backend");
+      return;
+    }
+    console.log("[Admin] Envío OK:", data);
+    setStatus("enviado backend ✔︎");
+  } catch (e) {
+    console.error("[Admin] Backend push error:", e);
+    setStatus("error backend");
+  }
+}
+
+
+  // Listeners
+  $('btn-os-subscribe')?.addEventListener('click', subscribeNow);
+  $('btn-os-test')?.addEventListener('click', testLocalNotification);
+  $('btn-os-unsubscribe')?.addEventListener('click', unsubscribeNow);
+  $('btn-os-send-backend')?.addEventListener('click', sendBackendPush);
+
+  // Estado inicial
+  (function initStatus(){
+    if (!("Notification" in window)) setStatus("este navegador no soporta notificaciones");
+    else setStatus(
+      Notification.permission === "granted" ? "permiso concedido" :
+      Notification.permission === "denied"  ? "permiso denegado"  :
+      "permiso sin decidir"
+    );
+  })();
+</script>
+
+
+</body>
+</html>

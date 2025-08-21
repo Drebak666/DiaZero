@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Citas</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/citas.css') }}" />
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+   
+</head>
+<body>
+
+    <div id="citas-container"></div>
+
+    <div id="form-editar-cita" class="oculto">
+        <h2>Editar Cita</h2>
+        <form id="editar-formulario">
+            <input type="hidden" id="editar-id" />
+
+            <label for="editar-descripcion">Descripción:</label>
+            <input type="text" id="editar-descripcion" required />
+
+            <label for="editar-fecha">Fecha:</label>
+            <input type="date" id="editar-fecha" required />
+
+            <label for="editar-hora-inicio">Hora de Inicio:</label>
+            <input type="time" id="editar-hora-inicio" />
+
+            <label for="editar-hora-fin">Hora de Fin:</label>
+            <input type="time" id="editar-hora-fin" />
+
+            <h3>Requisitos:</h3>
+            <div id="requisitos-container">
+                </div>
+            <div>
+                <input type="text" id="nuevo-requisito" placeholder="Añadir nuevo requisito" />
+                <button type="button" id="añadir-requisito">Añadir</button>
+            </div>
+            
+            <div class="form-buttons" style="margin-top: 20px;">
+                <button type="submit">Guardar Cambios</button>
+                <button type="button" id="cancelar-edicion">Cancelar</button>
+            </div>
+        </form>
+    </div>
+
+    <script type="module" src="{{ url_for('static', filename='js/all-appointments.js') }}"></script>
+
+</body>
+</html>

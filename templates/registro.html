@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Registro</title>
+  <link rel="stylesheet" href="/static/css/registro.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  
+</head>
+<body>
+  <header>
+    
+  </header>
+
+  <main class="main-section">
+    <!-- Formulario -->
+    <section class="section-content">
+      <h2>Nuevo Registro</h2>
+      <form id="form-registro">
+        <div class="form-group">
+          <label for="nombre">Nombre*:</label>
+          <input type="text" id="nombre" required>
+        </div>
+
+        <div class="form-group">
+          <label for="descripcion">Descripción:</label>
+          <textarea id="descripcion" placeholder="Opcional..."></textarea>
+        </div>
+
+        <div class="form-grid-2cols">
+          <div class="form-group">
+            <label for="fecha">Fecha:</label>
+            <input type="date" id="fecha" required>
+          </div>
+
+          <div class="form-group">
+            <label for="tipo">Tipo:</label>
+            <input list="tipos-existentes" id="tipo" placeholder="Ej: Médico, Escolar...">
+            <datalist id="tipos-existentes">
+              <!-- Se cargan desde Supabase -->
+            </datalist>
+          </div>
+        </div>
+
+       <div class="form-group-horizontal">
+  <div class="form-subgroup">
+    <label for="archivo">Adjuntar archivo o foto:</label>
+    <input type="file" id="archivo" class="form-control" accept="image/*,.pdf">
+  </div>
+  <div class="form-subgroup">
+    
+    <button id="btnCamara" type="button" onclick="abrirCamara()" class="form-control btn-foto">
+      📷 Tomar foto
+    </button>
+  </div>
+</div>
+
+
+
+        <div class="form-buttons">
+          <button type="submit" class="btn-success">Guardar Registro</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Filtros -->
+    <section class="section-content">
+      <h3>Filtrar por tipo:</h3>
+      <select id="filtro-tipo">
+        <option value="">Todos</option>
+        <!-- Se cargarán dinámicamente -->
+      </select>
+    </section>
+
+    <!-- Listado -->
+    <section class="section-content">
+      <h2>Registros</h2>
+      <div id="registros-lista">
+        <!-- Aquí se insertan los registros agrupados por fecha -->
+      </div>
+    </section>
+  </main>
+
+<!-- Modal de Cámara -->
+<div id="modalCamara" class="modal-camara hidden">
+  <video id="videoCamara" autoplay></video>
+  <div style="margin-top: 10px;">
+    <button onclick="sacarFoto()" class="btn-foto">📸 Capturar</button>
+    <button onclick="cerrarCamara()" class="btn-cerrar">Cancelar</button>
+  </div>
+</div>
+<canvas id="canvasFoto" style="display:none;"></canvas>
+
+
+  <script src="/static/js/registro.js" type="module"></script>
+</body>
+</html>

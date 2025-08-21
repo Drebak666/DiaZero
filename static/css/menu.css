@@ -1,0 +1,190 @@
+/* Fondo general y texto */
+body {
+  font-family: "Segoe UI", Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #121212;
+  color: #e0e0e0;
+}
+
+h1, h2, h3 {
+  text-align: center;
+  margin: 10px 0;
+  color: #ffffff;
+}
+
+/* Contenedor principal */
+#menu-semanal {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 10px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Tarjetas de día */
+.dia-menu {
+  background: #1e1e1e;
+  border-radius: 12px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+  padding: 15px;
+}
+
+/* Comidas (Desayuno, Comida, Cena) */
+.comida-dia {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 10px;
+}
+
+/* Encabezados */
+.comida-dia h3 {
+  font-size: 1.1em;
+  color: #90caf9;
+}
+
+/* Selector y botones */
+.selector-receta {
+  width: 100%;
+  padding: 8px;
+  margin: 6px 0;
+  border: none;
+  border-radius: 6px;
+  font-size: 1em;
+  background: #3a3a3a;
+  color: #fff;
+}
+
+.btn-add, .btn-success {
+  display: inline-block;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background-color: #4caf50;
+  color: white;
+  font-size: 1em;
+  cursor: pointer;
+  margin-top: 5px;
+  transition: background 0.3s ease;
+}
+
+.btn-add:hover, .btn-success:hover {
+  background-color: #43a047;
+}
+
+/* Lista de recetas */
+.lista-recetas {
+  list-style: none;
+  padding: 0;
+  margin: 5px 0 0;
+}
+
+.lista-recetas li {
+  background: #3a3a3a;
+  margin: 4px 0;
+  padding: 6px 8px;
+  border-radius: 5px;
+  font-size: 0.95em;
+}
+
+/* Totales */
+.totales p {
+  margin: 3px 0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9em;
+}
+
+/* Resumen semanal */
+#resumen-semanal {
+  text-align: center;
+  background: #1e1e1e;
+  padding: 15px;
+  margin: 10px;
+  border-radius: 12px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+}
+
+/* Botón guardar */
+#guardar-menu {
+  margin-top: 15px;
+  width: 90%;
+  max-width: 300px;
+}
+
+/* -------------------
+   RESPONSIVE
+------------------- */
+@media (max-width: 768px) {
+  #menu-semanal {
+    padding: 5px;
+  }
+  .dia-menu {
+    padding: 12px;
+  }
+  h1 {
+    font-size: 1.5em;
+  }
+  .btn-add, .btn-success {
+    width: 100%;
+  }
+}
+
+.nav-dias {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin: 15px 0;
+}
+
+.nav-dias button {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  border: none;
+  background: #4CAF50;
+  color: #fff;
+  font-size: 1.3em;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+  transition: background 0.3s ease, transform 0.1s ease;
+}
+
+.nav-dias button:hover {
+  background: #43a047;
+  transform: scale(1.1);
+}
+
+.lista-recetas li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #3a3a3a;
+  margin: 4px 0;
+  padding: 6px 10px;
+  border-radius: 5px;
+}
+
+.btn-delete {
+  background: #e74c3c;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 1.2em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.3s, transform 0.2s;
+}
+
+.btn-delete:hover {
+  background: #c0392b;
+  transform: scale(1.1);
+}
+

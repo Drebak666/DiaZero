@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Calendario</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendario.css') }}">
+  <script src="{{ url_for('static', filename='js/calendario.js') }}" type="module" defer></script>
+</head>
+<body>
+
+  <div class="calendario-container">
+    <div class="calendario-header">
+      <button id="prev-mes">←</button>
+
+      <select id="mes-select"></select>
+      <select id="año-select"></select>
+
+      <button id="next-mes">→</button>
+    </div>
+  <div class="dias-semana">
+  <div>Lun</div>
+  <div>Mar</div>
+  <div>Mié</div>
+  <div>Jue</div>
+  <div>Vie</div>
+  <div>Sáb</div>
+  <div>Dom</div>
+</div>
+
+    <div id="calendario-grid" class="grid-calendario">
+      <!-- Aquí se generarán los días del calendario -->
+    </div>
+
+    <div id="actividades-del-dia" class="actividades-dia">
+      <h3>Actividades del <span id="fecha-seleccionada"></span></h3>
+      <ul id="lista-actividades"></ul>
+    </div>
+  </div>
+</body>
+</html>

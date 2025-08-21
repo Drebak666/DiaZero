@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mi Despensa</title>
+  <!-- Cambiamos la hoja de estilos -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/despensa.css') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <script type="module" src="{{ url_for('static', filename='js/despensa.js') }}"></script>
+</head>
+<body>
+  <h1>Despensa</h1>
+
+  <form id="form-despensa">
+    <select id="ingrediente-select" required>
+      <option value="">Selecciona un ingrediente</option>
+    </select>
+    <input type="number" id="cantidad-ingrediente" placeholder="Cantidad" required />
+    <select id="unidad-ingrediente">
+      <option value="g">g</option>
+      <option value="ml">ml</option>
+      <option value="ud">ud</option>
+    </select>
+    <button type="submit">Añadir</button>
+  </form>
+
+  <hr />
+
+  <section id="despensa-container">
+    <p>Cargando ingredientes disponibles...</p>
+  </section>
+</body>
+</html>
