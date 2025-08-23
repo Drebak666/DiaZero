@@ -1,5 +1,23 @@
-// src/main.js
+// static/js/main.js
 import { supabase } from './supabaseClient.js';
+import '/static/js/push.js';        // ← importa el módulo por efecto secundario (adjunta window.enablePush)
+
+// (opcional) si quieres ver el estado en consola:
+console.log('push attach:', typeof window.enablePush);
+
+
+// Carga dinámica del módulo de push y expón la función al window
+(async () => {
+  try {
+    const mod = await import('/static/js/push.js');
+    window.enablePush = mod.enablePush;
+    globalThis.enablePush = mod.enablePush;  // añade esta
+    console.log('✅ enablePush listo');
+  } catch (e) {
+    console.error('❌ No se pudo cargar /static/js/push.js', e);
+  }
+})();
+
 
 document.addEventListener('DOMContentLoaded', async () => {
   // 1) sesión

@@ -130,18 +130,7 @@
     .mini-title{ max-width: 42vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   </style>
 
-  <!-- Cargar OneSignal lo antes posible -->
-  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"></script>
-  <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    window.OneSignalDeferred.push(async function (OneSignal) {
-      await OneSignal.init({
-        appId: "763d5d14-441f-4d1c-b7bd-85ed57fa6f85",
-        serviceWorkerPath: "/OneSignalSDKWorker.js",
-        serviceWorkerParam: { scope: "/" }
-      });
-    });
-  </script>
+
 </head>
 <body>
 
@@ -190,24 +179,7 @@
   <script src="{{ url_for('static', filename='js/player-shell.js') }}" type="module"></script>
   <script src="{{ url_for('static', filename='js/shell-router.js') }}" type="module"></script>
 
-  <!-- Lógica que necesita Supabase y OneSignal -->
-  <script type="module">
-    import { supabase } from "{{ url_for('static', filename='js/supabaseClient.js') }}";
 
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    window.OneSignalDeferred.push(async function (OneSignal) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // asegura permiso + suscripción y vincula el dispositivo al UID
-      await OneSignal.Notifications.requestPermission();
-      await OneSignal.User.PushSubscription.optIn();
-      await OneSignal.login(user.id);
-
-      console.log("OneSignal linked:", user.id,
-        "subId:", await OneSignal.User.PushSubscription.id);
-    });
-  </script>
 
   <script>
   // ——— Reloj desplegable ———

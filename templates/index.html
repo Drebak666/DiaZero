@@ -19,9 +19,6 @@
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}">
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-<!-- OneSignal SDK (cargar solo una vez) -->
-
-
 
 </head>
 
@@ -366,12 +363,25 @@
       <a class="icon-button" href="/registro"><i class="fas fa-clipboard-check"></i><span>Registro</span></a>
       <a class="icon-button" href="/calendario"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
       <a class="icon-button" href="/ejercicio"><i class="fas fa-dumbbell"></i><span>Ejercicio</span></a>
-      <a class="icon-button" href="/mejoras"><i class="fas fa-wrench"></i><span>Mejoras</span></a>
+
+ 
+       
+     
+       
+     
+     
+     
+
+
+
 
       <!-- Botón de cerrar sesión abajo -->
       <button id="cerrar-sesion" class="icon-button" style="background-color:red; border:none; cursor:pointer;">
         <i class="fas fa-sign-out-alt"></i><span>Cerrar sesión</span>
       </button>
+      
+
+
     </div>
   </div>
 </section>
@@ -402,6 +412,9 @@
 <script src="{{ url_for('static', filename='js/recetas.js') }}" type="module"></script>
 <script src="{{ url_for('static', filename='js/comida_dia.js') }}" type="module"></script>
 <script src="{{ url_for('static', filename='js/usuario.js') }}" type="module"></script>
+
+
+
 
 
 <!-- Asegurar sesión + decidir si mostrar Admin -->

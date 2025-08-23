@@ -1,29 +1,7 @@
 // static/js/login.js
 import { supabase } from './supabaseClient.js';
 
-// === OneSignal: vincular usuario ===
-async function linkOneSignal(userId) {
-  try {
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    window.OneSignalDeferred.push(async function (OneSignal) {
-      // Pide permiso (puedes cambiarlo a un botón más tarde)
-      if (OneSignal.Slidedown?.promptPush) {
-        await OneSignal.Slidedown.promptPush();
-      } else if (OneSignal.Notifications?.requestPermission) {
-        await OneSignal.Notifications.requestPermission();
-      }
-      // Vincula identidad (SDK v16)
-if (OneSignal.login) {
-  await OneSignal.login(userId);
-} else if (OneSignal.setExternalUserId) {
-  // compatibilidad SDK antiguo
-  await OneSignal.setExternalUserId(userId);
-}
-    });
-  } catch (e) {
-    console.error("OneSignal link:", e);
-  }
-}
+
 
 
 // Obtener referencias a las secciones y enlaces de alternancia
@@ -52,27 +30,58 @@ function isValidEmail(email) {
 }
 
 // Mostrar / ocultar formularios
-if (showRegisterFormLink && loginSection && registerSection) {
+// ==== Mostrar / ocultar formularios con estado persistente ====
+const pageTitle = document.getElementById('page-title');
+
+function setView(view) {
+  const isRegister = view === 'register';
+  if (loginSection && registerSection) {
+    // Evita que cualquier otro código “devuelva” el estado
+    loginSection.classList.toggle('hidden-form', isRegister);
+    registerSection.classList.toggle('hidden-form', !isRegister);
+  }
+  if (pageTitle) {
+    pageTitle.textContent = isRegister ? 'Registro' : 'Iniciar sesión';
+  }
+  // Persistimos la vista (útil si hay recargas ligeras)
+  sessionStorage.setItem('authView', isRegister ? 'register' : 'login');
+}
+
+// Arranque: prioriza hash (#register/#login), luego sessionStorage
+const initialView =
+  (location.hash === '#register') ? 'register' :
+  (location.hash === '#login') ? 'login' :
+  (sessionStorage.getItem('authView') || 'login');
+
+setView(initialView);
+
+// Responder a cambios de hash (si el usuario toca los enlaces)
+window.addEventListener('hashchange', () => {
+  const view = (location.hash === '#register') ? 'register' : 'login';
+  setView(view);
+});
+
+// Enlaces
+if (showRegisterFormLink) {
   showRegisterFormLink.addEventListener('click', (e) => {
     e.preventDefault();
-    loginSection.classList.add('hidden-form');
-    registerSection.classList.remove('hidden-form');
-    loginErrorMsg.textContent = '';
-    registerErrorMsg.textContent = '';
-    registerSuccessMsg.textContent = '';
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    setView('register');
+    if (location.hash !== '#register') history.replaceState(null, '', '#register');
   });
 }
 
-if (showLoginFormLink && loginSection && registerSection) {
+if (showLoginFormLink) {
   showLoginFormLink.addEventListener('click', (e) => {
     e.preventDefault();
-    registerSection.classList.add('hidden-form');
-    loginSection.classList.remove('hidden-form');
-    loginErrorMsg.textContent = '';
-    registerErrorMsg.textContent = '';
-    registerSuccessMsg.textContent = '';
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    setView('login');
+    if (location.hash !== '#login') history.replaceState(null, '', '#login');
   });
 }
+
 
 /* ============================
    REGISTRO (sign up) — SIEMPRE ADMIN
@@ -81,10 +90,10 @@ if (registerForm) {
   registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const email = registerUsernameInput.value.trim();
+    const rawEmail = registerUsernameInput.value;
+    const email = rawEmail?.normalize('NFKC').trim().toLowerCase();
     const password = registerPasswordInput.value.trim();
 
-    // Validaciones
     if (!isValidEmail(email)) {
       registerErrorMsg.textContent = 'Por favor ingresa un email válido';
       return;
@@ -102,108 +111,57 @@ if (registerForm) {
     }
 
     try {
-      // 1) Crear usuario en Auth
-      const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
-      if (signUpError) throw signUpError;
+      // 1) Crear usuario
+      const { data: signData, error: signUpError } = await supabase.auth.signUp({ email, password });
 
-      const userId = data?.user?.id;
-      if (!userId) {
-        // si requiere verificación por email, seguimos con la fila en usuarios usando username
-        // (pero normalmente data.user.id viene)
-        registerSuccessMsg.textContent = 'Registro realizado. Revisa tu correo para verificar la cuenta.';
+      // 1.1) Si ya estaba registrado → iniciar sesión
+      if (signUpError) {
+        const msg = String(signUpError.message || '').toLowerCase();
+        if (signUpError.status === 422 || msg.includes('already')) {
+          const { error: siErr } = await supabase.auth.signInWithPassword({ email, password });
+          if (siErr) throw siErr;
+        } else {
+          throw signUpError;
+        }
       }
 
-      // 2) Upsert en tabla 'usuarios' → role = 'admin' garantizado
+      // 2) userId seguro (ANTES de tocar tu tabla)
+      const { data: sessionData } = await supabase.auth.getUser();
+      const userId = sessionData?.user?.id;
+      if (!userId) throw new Error('No se recibió el id del usuario');
+
+      // 3) Upsert en TU tabla CON id (no uuid) y conflicto por 'id'
       const { error: upsertErr } = await supabase
         .from('usuarios')
-        .upsert(
-          { id: userId, username: email, role: 'admin' },
-          { onConflict: 'id' }
-        )
-        .select('id')
-        .single();
-
+.upsert({ id: userId, username: email, role: 'admin' }, { onConflict: 'id' })
       if (upsertErr) throw upsertErr;
 
-      // 3) Iniciar sesión automáticamente
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) {
-        registerSuccessMsg.textContent = 'Registro exitoso. Por favor inicia sesión manualmente.';
-        return;
-      }
-
-      // 4) Leer perfil, corregir rol si hiciera falta, y guardar en localStorage
-      let { data: perfil, error: userError } = await supabase
+      // 4) Leer perfil y forzar admin si hiciera falta (usando id)
+      let { data: perfil, error: selErr } = await supabase
         .from('usuarios')
         .select('username, role')
         .eq('id', userId)
         .single();
+      if (selErr) throw selErr;
 
-      if (userError) throw userError;
-
-      if (!perfil?.role || perfil.role !== 'admin') {
-        const { data: fixed } = await supabase
+      if (perfil?.role !== 'admin') {
+        const { data: fixed, error: fixErr } = await supabase
           .from('usuarios')
           .update({ role: 'admin' })
           .eq('id', userId)
           .select('username, role')
           .single();
+        if (fixErr) throw fixErr;
         if (fixed) perfil = fixed;
       }
 
       localStorage.setItem('usuario_actual', perfil.username);
       localStorage.setItem('rol_usuario', perfil.role);
-      // Vincular usuario con OneSignal
-await linkOneSignal(userId);
-
-window.location.href = '/';
+      window.location.href = '/';
 
     } catch (error) {
       console.error('Error en registro:', error);
-
-      if (String(error.message || '').includes('duplicate key value')) {
-        // Si ya existe, intentar iniciar sesión
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-        if (signInError) {
-          registerErrorMsg.textContent = 'El usuario ya existe. Inicia sesión.';
-        } else {
-          const { data: { user } } = await supabase.auth.getUser();
-          let { data: perfil } = await supabase
-            .from('usuarios')
-            .select('username, role')
-            .eq('id', user.id)
-            .single();
-
-          if (!perfil) {
-            // crea fila si faltara
-            await supabase.from('usuarios').upsert({ id: user.id, username: email, role: 'admin' }, { onConflict: 'id' });
-            ({ data: perfil } = await supabase
-              .from('usuarios')
-              .select('username, role')
-              .eq('id', user.id)
-              .single());
-          } else if (perfil.role !== 'admin') {
-            const { data: fixed } = await supabase
-              .from('usuarios')
-              .update({ role: 'admin' })
-              .eq('id', user.id)
-              .select('username, role')
-              .single();
-            if (fixed) perfil = fixed;
-          }
-
-          localStorage.setItem('usuario_actual', perfil.username);
-localStorage.setItem('rol_usuario', perfil.role);
-
-// Vincular usuario con OneSignal
-await linkOneSignal(user.id);
-
-window.location.href = '/';
-
-        }
-      } else {
-        registerErrorMsg.textContent = error.message || 'No se pudo completar el registro.';
-      }
+      registerErrorMsg.textContent = error.message || 'No se pudo completar el registro.';
     } finally {
       if (registerButton) {
         registerButton.disabled = false;
@@ -212,6 +170,7 @@ window.location.href = '/';
     }
   });
 }
+
 
 /* ============================
    LOGIN (sign in) — AUTO-CREA ADMIN SI FALTA
@@ -238,15 +197,15 @@ if (loginForm) {
       let { data: perfil, error: selErr } = await supabase
         .from('usuarios')
         .select('username, role')
-        .eq('id', userId)
-        .maybeSingle();
+.eq('id', userId).maybeSingle();
+
 
       if (selErr) throw selErr;
 
       if (!perfil) {
         const { data: inserted, error: insErr } = await supabase
           .from('usuarios')
-          .upsert({ id: userId, username: email, role: 'admin' }, { onConflict: 'id' })
+.upsert({ uuid: userId, username: email, role: 'admin' }, { onConflict: 'uuid' })
           .select('username, role')
           .single();
         if (insErr) throw insErr;
@@ -255,8 +214,7 @@ if (loginForm) {
         const { data: fixed, error: fixErr } = await supabase
           .from('usuarios')
           .update({ role: 'admin' })
-          .eq('id', userId)
-          .select('username, role')
+.eq('id', userId)          .select('username, role')
           .single();
         if (fixErr) throw fixErr;
         perfil = fixed;
@@ -264,7 +222,6 @@ if (loginForm) {
 
       localStorage.setItem('usuario_actual', perfil.username);
 localStorage.setItem('rol_usuario', perfil.role);
-await linkOneSignal(userId);           // ← AÑADIR ESTA LÍNEA
 window.location.href = '/';
 
 

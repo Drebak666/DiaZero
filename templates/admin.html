@@ -16,8 +16,7 @@
 <body>
   <!-- Header compacto -->
   <header class="admin-header">
-    <a href="{{ url_for('serve_index') }}" class="admin-back">
-      <i class="fas fa-arrow-left"></i><span>Volver</span>
+<a href="{{ url_for('html.serve_index') }}" class="admin-back">      <i class="fas fa-arrow-left"></i><span>Volver</span>
     </a>
     <h1>Administración</h1>
   </header>
@@ -182,30 +181,13 @@
       <h2>Accesos productividad</h2>
       <div class="admin-card">
         <div class="admin-actions">
-          <a class="admin-btn" href="{{ url_for('mejoras') }}">
-            <i class="fas fa-wrench"></i><span>Mejoras</span>
+<a class="admin-btn" href="{{ url_for('html.mejoras') }}">            <i class="fas fa-wrench"></i><span>Mejoras</span>
           </a>
         </div>
       </div>
     </section>
     <!-- ===== Sección: Notificaciones ===== -->
-<section class="admin-section" id="admin-notificaciones">
-  <h2>Notificaciones</h2>
-  <div class="admin-card">
-    <div class="admin-actions">
-      <button class="admin-btn" id="btn-os-subscribe" type="button">
-        <i class="fas fa-bell"></i><span>Suscribirme</span>
-      </button>
-      <button class="admin-btn" id="btn-os-test" type="button">
-        <i class="fas fa-paper-plane"></i><span>Probar local</span>
-      </button>
-      <!-- Añade junto al botón "Suscribirme" en admin -->
-<button class="admin-btn" id="btn-os-unsubscribe" type="button">
-  <i class="fas fa-bell-slash"></i><span>Desuscribirme</span>
-</button>
-<button class="admin-btn" id="btn-os-send-backend" type="button">
-  <i class="fas fa-paper-plane"></i><span>Enviar prueba (backend)</span>
-</button>
+
 
     </div>
     <div id="os-status" class="form-text" style="margin-top:8px;">Estado: —</div>
@@ -256,6 +238,318 @@
     </div>
   </div>
 </section>
+<!-- ========== NOTIFICACIONES ========== -->
+<section class="admin-card" style="margin-top:1rem">
+  <h2>🔔 Notificaciones</h2>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin:.5rem 0">
+    <button id="btn-notify-sub" class="admin-btn">Suscribirme</button>
+    <button id="btn-notify-unsub" class="admin-btn">Desuscribirme</button>
+    <button id="btn-notify-test" class="admin-btn">Probar envío</button>
+    <span id="notify-status" style="align-self:center">Estado: —</span>
+  </div>
+
+  <hr style="opacity:.2">
+
+  <h3 style="margin:.5rem 0">⏱️ Horarios por defecto</h3>
+  <form id="notify-prefs" style="display:grid;grid-template-columns:180px 1fr;gap:10px;max-width:640px">
+
+  <!-- Rutinas -->
+  <h4 style="grid-column:1/-1;margin:.5rem 0 0">Rutinas</h4>
+  <label for="rut_mins">Avisar minutos antes</label>
+  <input id="rut_mins" type="number" min="0" step="1" value="15">
+
+  <!-- Tareas -->
+  <h4 style="grid-column:1/-1;margin:.5rem 0 0">Tareas</h4>
+  <label for="tas_mins">Avisar minutos antes</label>
+  <input id="tas_mins" type="number" min="0" step="1" value="15">
+
+  <!-- Citas -->
+  <h4 style="grid-column:1/-1;margin:.5rem 0 0">Citas</h4>
+  <div style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px">
+    <label><input type="checkbox" class="apt_preset" data-min="-43200"> 1 mes</label>
+    <label><input type="checkbox" class="apt_preset" data-min="-21600"> 15 días</label>
+    <label><input type="checkbox" class="apt_preset" data-min="-1440"> 1 día</label>
+    <label><input type="checkbox" class="apt_preset" data-min="-60"> 1 hora</label>
+  </div>
+
+  <label for="apt_custom_val">Personalizada</label>
+  <div>
+    <input id="apt_custom_val" type="number" min="1" step="1" value="30" style="width:120px">
+    <select id="apt_custom_unit">
+      <option value="min">min</option>
+      <option value="h">horas</option>
+      <option value="d">días</option>
+    </select>
+    <button type="button" id="apt_add" class="admin-btn" style="margin-left:8px">Añadir alarma</button>
+    <small style="margin-left:8px;opacity:.7">(máx. 3 en total)</small>
+  </div>
+
+  <div style="grid-column:1/-1">
+    <div id="apt_list" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+  </div>
+
+  <div></div>
+  <button class="admin-btn" type="submit">Guardar</button>
+</form>
+
+
+</section>
+
+
+
+<script type="module">
+  const username = localStorage.getItem('usuario_actual') || 'raul@gmail.com';
+
+  async function loadPrefs() {
+    try {
+      const r = await fetch(`/api/notification-prefs?username=${encodeURIComponent(username)}`);
+      const data = await r.json();
+      if (!r.ok || !data.ok) return console.warn("No se pudieron cargar prefs", data);
+
+      const prefs = data.prefs || {};
+      const rut = prefs.routines?.offsets?.[0] ?? -15;
+      const tas = prefs.tasks?.offsets?.[0] ?? -15;
+      const apt = prefs.appointments?.offsets ?? [];
+
+      // rutinas/tareas → absolutos
+      document.getElementById("rut_mins").value = Math.abs(rut);
+      document.getElementById("tas_mins").value = Math.abs(tas);
+
+      // citas → chips
+      const list = document.getElementById("apt_list");
+      list.innerHTML = "";
+      apt.slice(0, 3).forEach(v => {
+        const chip = document.createElement("span");
+        chip.dataset.min = String(v);
+        chip.textContent = `${Math.abs(v)} min antes `;
+        const x = document.createElement("button");
+        x.type = "button";
+        x.textContent = "×";
+        x.onclick = () => chip.remove();
+        chip.appendChild(x);
+        list.appendChild(chip);
+      });
+    } catch (e) {
+      console.error("Error cargando prefs", e);
+    }
+  }
+
+  loadPrefs();
+</script>
+
+
+
+
+
+<script type="module">
+  // ===== PUSH (solo suscripción / prueba) =====
+  const $ = (s) => document.querySelector(s);
+  const statusEl = $('#notify-status');
+  const username = localStorage.getItem('usuario_actual') || 'raul@gmail.com';
+  const VAPID_PUBLIC = "{{ vapid_public }}";   // inyectado por Flask
+
+  const toUint8 = (b64u) => {
+    const pad = '='.repeat((4 - (b64u.length % 4)) % 4);
+    const s = (b64u + pad).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(s);
+    const arr = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+  };
+
+  async function pushStatus() {
+    try {
+      if (!('serviceWorker' in navigator)) {
+        statusEl.textContent = 'Estado: SW no disponible';
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      const perm = Notification.permission;
+      statusEl.textContent = sub
+        ? `Estado: ✅ suscrito (${perm})`
+        : `Estado: ⚠️ no suscrito (${perm})`;
+    } catch (e) {
+      statusEl.textContent = 'Estado: error';
+      console.error(e);
+    }
+  }
+
+  async function subscribe() {
+    try {
+      if (Notification.permission !== 'granted') {
+        const p = await Notification.requestPermission();
+        if (p !== 'granted') { statusEl.textContent = 'Permiso denegado'; return; }
+      }
+      const reg = await navigator.serviceWorker.ready;
+
+      // opcional: limpia suscripción vieja
+      const old = await reg.pushManager.getSubscription();
+      if (old) await old.unsubscribe();
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: toUint8(VAPID_PUBLIC),
+      });
+
+      const s = sub.toJSON();
+      const resp = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          username, endpoint: s.endpoint, p256dh: s.keys.p256dh, auth: s.keys.auth
+        })
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(JSON.stringify(data));
+      statusEl.textContent = 'Estado: ✅ suscrito';
+    } catch (e) {
+      console.error('subscribe error', e);
+      statusEl.textContent = 'Estado: error al suscribir';
+    }
+  }
+
+  async function unsubscribe() {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        const endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        await fetch('/api/push/unsubscribe', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ username, endpoint })
+        });
+      }
+      statusEl.textContent = 'Estado: ⚠️ no suscrito';
+    } catch (e) {
+      console.error('unsubscribe error', e);
+      statusEl.textContent = 'Estado: error al desuscribir';
+    }
+  }
+
+  async function sendTest() {
+    try {
+      const resp = await fetch('/api/push/send', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ username, title: '🔔 Prueba', body: 'Notificación de prueba', url: '/' })
+      });
+      const ct = resp.headers.get('content-type') || '';
+      const data = ct.includes('application/json') ? await resp.json() : await resp.text();
+      console.log('push/send ->', resp.status, data);
+      if (!resp.ok) alert('Falló el envío: ' + (data.error || resp.status));
+    } catch (e) {
+      console.error(e);
+      alert('Error al enviar');
+    }
+  }
+
+  // Botones push
+  $('#btn-notify-sub')?.addEventListener('click', subscribe);
+  $('#btn-notify-unsub')?.addEventListener('click', unsubscribe);
+  $('#btn-notify-test')?.addEventListener('click', sendTest);
+
+  pushStatus();
+</script>
+
+<!-- ========== /NOTIFICACIONES ========== -->
+<script type="module">
+  const DEFAULT_APT = [-43200, -21600, -1440, -60];
+  const username = localStorage.getItem('usuario_actual') || 'raul@gmail.com';
+
+  const $ = (s) => document.querySelector(s);
+
+  function currentAptOffsets() {
+    const list = document.getElementById('apt_list');
+    if (!list) return [];
+    return [...list.querySelectorAll('span[data-min]')].map(s => parseInt(s.dataset.min, 10));
+  }
+
+  // Guardado robusto
+document.getElementById('notify-prefs')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const rutEl = document.getElementById('rut_mins');
+  const tasEl = document.getElementById('tas_mins');
+
+  const rut = parseInt(rutEl?.value ?? '15', 10);
+  const tas = parseInt(tasEl?.value ?? '15', 10);
+
+  // asegúrate de que sean negativos (“minutos antes”)
+  const rutOff = -Math.abs(isFinite(rut) ? rut : 15);
+  const tasOff = -Math.abs(isFinite(tas) ? tas : 15);
+
+  let apt = currentAptOffsets();
+  if (!apt.length) apt = DEFAULT_APT;
+  apt = apt.slice(0, 3).map(n => (n <= 0 ? n : -Math.abs(n)));
+
+  // 👇 Aquí añadimos el log para ver qué se manda
+console.log("Payload enviado →", JSON.stringify({
+  username,
+  routines:     { offsets: [rutOff] },
+  tasks:        { offsets: [tasOff] },
+  appointments: { offsets: apt }
+}, null, 2));
+
+
+  try {
+    const r = await fetch('/api/notification-prefs', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        username,
+        routines:     { offsets: [rutOff] },
+        tasks:        { offsets: [tasOff] },
+        appointments: { offsets: apt }
+      })
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data.ok) {
+      console.log('Preferencias guardadas');
+    } else {
+      console.warn('Guardar falló', r.status, data);
+      alert('No se pudo guardar preferencias.');
+    }
+  } catch (err) {
+    console.error('savePrefs error', err);
+    alert('Error de red guardando preferencias.');
+  }
+});
+
+
+  // (opcional) Añadir alarma personalizada
+  document.getElementById('apt_add')?.addEventListener('click', () => {
+    const valEl = document.getElementById('apt_custom_val');
+    const unitEl = document.getElementById('apt_custom_unit');
+    const list   = document.getElementById('apt_list');
+    if (!valEl || !unitEl || !list) return;
+
+    let v = parseInt(valEl.value, 10);
+    if (!isFinite(v) || v <= 0) return;
+
+    const u = unitEl.value;
+    if (u === 'h') v *= 60;
+    if (u === 'd') v *= 1440;
+    v = -Math.abs(v);
+
+    const curr = currentAptOffsets();
+    if (curr.length >= 3) return alert('Máximo 3 alarmas');
+
+    // chip
+    const chip = document.createElement('span');
+    chip.dataset.min = String(v);
+    chip.textContent  = `${Math.abs(v)} min antes `;
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '×';
+    x.onclick = () => chip.remove();
+    chip.appendChild(x);
+    list.appendChild(chip);
+  });
+</script>
+
 
 
 
@@ -403,152 +697,7 @@
     });
   </script>
 
-<!-- NOTIFICACIONES (ÚNICO BLOQUE) -->
-<script type="module">
-  import { supabase } from "{{ url_for('static', filename='js/supabaseClient.js') }}";
 
-  const APP_ID = "763d5d14-441f-4d1c-b7bd-85ed57fa6f85";
-
-  const $ = (id) => document.getElementById(id);
-  const statusEl = $('os-status');
-  const setStatus = (t) => { if (statusEl) statusEl.textContent = "Estado: " + t; };
-
-  // Carga OneSignal e inicializa (local con allowLocalhost)
-  async function ensureOneSignalReady() {
-    if (!window.OneSignal) {
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
-        s.onload = resolve; s.onerror = reject;
-        document.head.appendChild(s);
-      });
-    }
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    await new Promise((resolve) => {
-      window.OneSignalDeferred.push(async function (OneSignal) {
-        const isLocal = ['localhost','127.0.0.1'].includes(location.hostname);
-        try {
-          await OneSignal.init({
-            appId: APP_ID,
-            serviceWorkerPath: "/OneSignalSDKWorker.js",
-            serviceWorkerParam: { scope: "/" },
-            ...(isLocal ? { allowLocalhostAsSecureOrigin: true } : {})
-          });
-        } catch {}
-        resolve();
-      });
-    });
-  }
-
-  async function subscribeNow(){
-    try {
-      setStatus("preparando…");
-      await ensureOneSignalReady();
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setStatus("inicia sesión primero"); return; }
-
-      // Permiso + opt-in + login
-      if (Notification.permission !== "granted") {
-        const p = await Notification.requestPermission();
-        if (p !== "granted") { setStatus("permiso denegado"); return; }
-      }
-      await window.OneSignal.User.PushSubscription.optIn();
-      await window.OneSignal.login(user.id);
-
-      const subId = await window.OneSignal.User.PushSubscription.id;
-      setStatus(subId ? ("suscrito ✔︎ subId: " + subId) : "suscrito ✔︎ (sin subId aún)");
-    } catch (e) {
-      console.error("OneSignal subscribe error:", e);
-      setStatus("error al suscribirse (ver consola)");
-    }
-  }
-
-  async function testLocalNotification(){
-    try {
-      if (Notification.permission !== "granted") {
-        const p = await Notification.requestPermission();
-        if (p !== "granted") { setStatus("permiso denegado"); return; }
-      }
-      let reg = null;
-      if ("serviceWorker" in navigator) {
-        reg = await navigator.serviceWorker.getRegistration("/OneSignalSDKWorker.js");
-      }
-      const title = "Prueba desde Admin";
-      const options = { body: "Notificación local OK", icon: "/favicon.ico" };
-      if (reg && reg.showNotification) reg.showNotification(title, options);
-      else new Notification(title, options);
-      setStatus("notificación local enviada");
-    } catch(e){
-      console.error("Test notification error:", e);
-      setStatus("error en prueba local");
-    }
-  }
-
-  async function unsubscribeNow(){
-    try {
-      await window.OneSignal.User.PushSubscription.optOut();
-      await window.OneSignal.logout();
-      setStatus("desuscrito ✔︎");
-    } catch (e) {
-      console.error('Unsubscribe error:', e);
-      setStatus("error al desuscribirse");
-    }
-  }
-
-  // Envío real desde backend usando subscription_id (v1 + include_player_ids)
- async function sendBackendPush(){
-  try {
-    await ensureOneSignalReady();
-
-    const subId = await window.OneSignal?.User?.PushSubscription?.id;
-    console.log("[Admin] subscription_id:", subId);
-    if (!subId) { setStatus("no hay subscription_id"); return; }
-
-    const response = await fetch("/api/push", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        subscription_id: subId,
-        title: "MiAgenda",
-        body:  "Prueba de push desde backend ✅"
-      })
-    });
-
-    const ct = response.headers.get("content-type") || "";
-    const data = ct.includes("application/json") ? await response.json()
-                                                 : await response.text();
-
-    if (!response.ok) {
-      console.error("[Admin] Backend push error:", data);
-      setStatus("falló envío backend");
-      return;
-    }
-    console.log("[Admin] Envío OK:", data);
-    setStatus("enviado backend ✔︎");
-  } catch (e) {
-    console.error("[Admin] Backend push error:", e);
-    setStatus("error backend");
-  }
-}
-
-
-  // Listeners
-  $('btn-os-subscribe')?.addEventListener('click', subscribeNow);
-  $('btn-os-test')?.addEventListener('click', testLocalNotification);
-  $('btn-os-unsubscribe')?.addEventListener('click', unsubscribeNow);
-  $('btn-os-send-backend')?.addEventListener('click', sendBackendPush);
-
-  // Estado inicial
-  (function initStatus(){
-    if (!("Notification" in window)) setStatus("este navegador no soporta notificaciones");
-    else setStatus(
-      Notification.permission === "granted" ? "permiso concedido" :
-      Notification.permission === "denied"  ? "permiso denegado"  :
-      "permiso sin decidir"
-    );
-  })();
-</script>
 
 
 </body>
