@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="vapid-public" content="{{ vapid_public }}">
+<script>window.VAPID_PUBLIC = "{{ vapid_public }}";</script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <title>Administración</title>
 
@@ -295,6 +297,20 @@
 
 
 </section>
+
+<script>
+  (function () {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker
+      .register('/sw.js?v=20250824', { scope: '/' }) // 👈 añadimos versión
+      .then(reg => {
+        console.log('[admin] SW registrado:', reg.scope);
+        // Si hay un SW nuevo, que tome control ya
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      })
+      .catch(err => console.error('[admin] Error registrando SW:', err));
+  })();
+</script>
 
 
 

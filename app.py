@@ -179,16 +179,19 @@ def _mark_sent(flask_app, username, kind, item_id, offset_min):
     except Exception:
         pass
 
+PUSH_BASE = os.getenv("PUSH_BASE_URL", "").rstrip("/")
 def _send_push(username, title, body, url="/"):
     try:
+        base = PUSH_BASE or "https://environmental-marthe-diazero2-5ab75580.koyeb.app"
         r = requests.post(
-            "http://127.0.0.1:5000/api/push/send",
+            f"{base}/api/push/send",
             json={"username": username, "title": title, "body": body, "url": url},
             timeout=10,
         )
         return r.ok
     except Exception:
         return False
+
 
 # =========================
 # Chequeo de TAREAS

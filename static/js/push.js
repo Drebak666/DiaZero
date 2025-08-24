@@ -15,7 +15,8 @@ export async function enablePush(username) {
     }
 
     // ⚠️ Pega aquí tu clave pública VAPID (la de .env VAPID_PUBLIC)
-    const VAPID_PUBLIC_KEY = 'BLtN98ZtEtdv07o2x_s1isjdYPUdH7VHdL5_cAf0ldKxkVFLQhEeCDE16gJSNwv7Wh40NKJzTksKA1yMvBMjToI';
+    const VAPID_PUBLIC_KEY = (window.VAPID_PUBLIC || document.querySelector('meta[name="vapid-public"]')?.content || '').trim();
+    if (!VAPID_PUBLIC_KEY) throw new Error('VAPID_PUBLIC no disponible en el front');
 
     const applicationServerKey = (function urlBase64ToUint8Array(base64String) {
       const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
