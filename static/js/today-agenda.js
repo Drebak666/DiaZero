@@ -261,30 +261,46 @@ actividades.sort((a, b) => {
 
 
 // Antes de actividades.forEach(...)
-// --- separar en conHora / sinHora ---
-// --- separar en conHora / sinHora ---
-const conHora = [];
+
+// === ORDEN NUEVO ===
+// Grupos: con hora (activos) → sin hora → documentos → completadas
+const timedActive = [];
 const sinHora = [];
+const documentos = [];
+const completadas = [];
 
 for (const a of actividades) {
+  if (a.completado) { completadas.push(a); continue; }
+
+  const esDoc = (a.tipo === 'Tarea' && a.document_id != null);
   const tieneHora = !!(a.start && a.start.includes(':'));
-  if (tieneHora) {
-    conHora.push(a); // incluye tareas, mejoras, requisitos y rutinas con hora
+
+  if (esDoc) {
+    documentos.push(a);
+  } else if (tieneHora) {
+    timedActive.push(a);
   } else {
-    sinHora.push(a); // todo sin hora, incluidas rutinas sin hora
+    sinHora.push(a);
   }
 }
 
-// --- ordenar las que tienen hora (completadas SIEMPRE al final) ---
-conHora.sort((a, b) => {
-  if (a.completado !== b.completado) {
-    return a.completado ? 1 : -1; // completadas al final
-  }
-  return (a.start || '').localeCompare(b.start || '');
+// 1) Con hora (tareas y rutinas): por hora ascendente
+timedActive.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+
+// 2) Sin hora: (sin criterio especial; puedes ordenar por prioridad si la usas)
+// 3) Documentos: los que caducan antes, más arriba; luego por descripción
+documentos.sort((a, b) => {
+  const la = (a.doc_days_left ?? 9e9), lb = (b.doc_days_left ?? 9e9);
+  if (la !== lb) return la - lb;
+  return (a.descripcion || '').localeCompare(b.descripcion || '');
 });
 
-// --- lista final ---
-const lista = [...conHora, ...sinHora];
+// 4) Completadas: al final, por hora ascendente si la tenían
+completadas.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+
+// Lista final
+const lista = [...timedActive, ...sinHora, ...documentos, ...completadas];
+
 
 
 lista.forEach(act => {
@@ -434,9 +450,6 @@ lista.forEach(act => {
 
 // FIN del forEach de render
 
-agregarEventos();
-initDragAndDropTareas();
-
 
   agregarEventos();
   initDragAndDropTareas(); // activar drag & drop simple
@@ -474,18 +487,37 @@ async function initDragAndDropTareas() {
   if (!list) return;
 
   let draggingEl = null;
-  let veniaSinHora = false;             // 👈 guardamos estado original
+  let veniaSinHora = false; // guardamos estado original
   const ph = document.createElement('div');
   ph.className = 'drag-placeholder';
 
+  // helper usado por dragover/drop
+  // helper usado por dragover/drop
+function getAfterElement(container, y) {
+  // 🔁 ahora miramos TODOS los items visuales, no solo los draggables
+  const els = [...container.querySelectorAll('.actividad-item:not(.dragging)')];
+  let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+  for (const child of els) {
+    const box = child.getBoundingClientRect();
+    const offset = y - (box.top + box.height / 2);
+    if (offset < 0 && offset > closest.offset) {
+      closest = { offset, element: child };
+    }
+  }
+  return closest.element;
+}
+
+
+  // eventos de cada tarjeta
   list.querySelectorAll('.draggable-task').forEach(el => {
     el.addEventListener('dragstart', (e) => {
       draggingEl = e.currentTarget;
-      veniaSinHora = draggingEl.dataset.sinHora === '1';   // 👈
+      veniaSinHora = draggingEl.dataset.sinHora === '1';
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', draggingEl.dataset.id);
       setTimeout(() => draggingEl.classList.add('dragging'), 0);
     });
+
     el.addEventListener('dragend', () => {
       draggingEl?.classList.remove('dragging');
       ph.remove();
@@ -494,6 +526,7 @@ async function initDragAndDropTareas() {
     });
   });
 
+  // placeholder donde quedará al mover
   list.addEventListener('dragover', (e) => {
     if (!draggingEl) return;
     e.preventDefault();
@@ -502,37 +535,25 @@ async function initDragAndDropTareas() {
     else list.insertBefore(ph, after);
   });
 
-  list.addEventListener('drop', async (e) => {
-    if (!draggingEl) return;
-    e.preventDefault();
-    const after = getAfterElement(list, e.clientY);
-    if (after == null) list.appendChild(draggingEl);
-    else list.insertBefore(draggingEl, after);
-    ph.remove();
+  // soltar: recoloca y ajusta SOLO la tarea soltada
+list.addEventListener('drop', async (e) => {
+  if (!draggingEl) return;
+  e.preventDefault();
 
-    if (veniaSinHora) {
-      // 👇 Solo esta tarjeta recibe una hora nueva, no tocamos el resto
-      await asignarHoraAlSoltar(draggingEl);
-      mostrarToast('Hora asignada');
-    } else {
-      // 👇 Reprograma todas las tareas con hora en cascada (como antes)
-      await reprogramarSecuencialSimple();
-      mostrarToast('Hora actualizada');
-    }
-    cargarAgendaHoy(); // refresca todo
-  });
+  const after = getAfterElement(list, e.clientY);
+  const droppedAtEnd = (after == null);          // 👈 NUEVO
+  if (droppedAtEnd) list.appendChild(draggingEl);
+  else list.insertBefore(draggingEl, after);
+  ph.remove();
 
-  function getAfterElement(container, y) {
-    const els = [...container.querySelectorAll('.draggable-task:not(.dragging)')];
-    let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
-    els.forEach(child => {
-      const box = child.getBoundingClientRect();
-      const offset = y - box.top - box.height / 2;
-      if (offset < 0 && offset > closest.offset) closest = { offset, element: child };
-    });
-    return closest.element;
-  }
+  await asignarHoraAlSoltar(draggingEl, { droppedAtEnd, container: list }); // 👈 pasa flag y contenedor
+  mostrarToast(veniaSinHora ? 'Hora asignada' : 'Hora actualizada');
+  cargarAgendaHoy();
+});
 }
+
+
+
 
 
 /**
@@ -831,35 +852,104 @@ window.addEventListener('cita-borrada', () => {
  * - si el anterior no tiene fin/hora, usa "ahora" redondeado a 15';
  * - NO toca al resto.
  */
-async function asignarHoraAlSoltar(el) {
+async function asignarHoraAlSoltar(el, opts = {}) {
+  const containerEl = opts.container || document.getElementById('agenda-container');
+  const droppedAtEnd = !!opts.droppedAtEnd;
+
   const subtipo = el.dataset.subtipo || 'tarea';
   const dur = duracionPorDefecto(subtipo);
 
-  // 1) Busca el hermano anterior con hora válida
-  let prev = el.previousElementSibling;
-  let prevEnd = null;
-  while (prev) {
-    if (prev.classList?.contains('actividad-item')) {
-      const horaTxt = prev.querySelector('.actividad-hora')?.textContent || '';
-      const m = horaTxt.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
-      if (m) { prevEnd = parseHHMM(m[2]); break; }
-      const sOnly = horaTxt.match(/^(\d{2}:\d{2})$/);
-      if (sOnly) { prevEnd = addMinutes(parseHHMM(sOnly[1]), dur); break; }
-    }
-    prev = prev.previousElementSibling;
+  // --- helpers internos (una sola vez, en este orden) ---
+  function toPair(s) {
+    if (!s) return null;
+    const [hh, mm] = s.split(':').map(n => parseInt(n, 10));
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+    return { h: hh, m: mm };
   }
 
-  // 2) Punto de partida
-  let start = null;
-  if (prevEnd) {
-    start = prevEnd;
+  function extractRange(node) {
+    const timeNode = node.querySelector?.('.actividad-hora, .actividad-horario, .hora, .time') || node;
+    const txt = (timeNode.textContent || '').trim();
+    const matches = txt.match(/\b(\d{1,2}:\d{2})\b/g) || [];
+    if (matches.length >= 2) {
+      const a = toPair(matches[0]), b = toPair(matches[1]);
+      if (a && b) return { start: a, end: b };
+    } else if (matches.length === 1) {
+      const a = toPair(matches[0]);
+      if (a) {
+        const d = duracionPorDefecto(node.dataset.subtipo || 'tarea');
+        return { start: a, end: addMinutes(a, d) };
+      }
+    }
+    return null;
+  }
+
+  function shouldSkip(node) {
+    return (
+      node === el ||
+      node?.classList?.contains('actividad-completada') ||
+      node?.classList?.contains('subtipo-documento')
+    );
+  }
+
+  function isItem(n) {
+    return n?.classList?.contains('actividad-item') || n?.classList?.contains('draggable-task');
+  }
+
+  function prevTimed(from) {
+    let p = from.previousElementSibling;
+    while (p) {
+      if (!shouldSkip(p) && isItem(p)) { const r = extractRange(p); if (r) return r; }
+      p = p.previousElementSibling;
+    }
+    return null;
+  }
+
+  function nextTimed(from) {
+    let n = from.nextElementSibling;
+    while (n) {
+      if (!shouldSkip(n) && isItem(n)) { const r = extractRange(n); if (r) return r; }
+      n = n.nextElementSibling;
+    }
+    return null;
+  }
+
+  function lastTimed() {
+    let n = containerEl?.lastElementChild;
+    while (n) {
+      if (!shouldSkip(n) && isItem(n)) { const r = extractRange(n); if (r) return r; }
+      n = n.previousElementSibling;
+    }
+    return null;
+  }
+
+  // --- calcula referencias vecinas ---
+  let prevRange = prevTimed(el);
+  let nextRange = nextTimed(el);
+  if (droppedAtEnd && !nextRange) {
+    const last = lastTimed();
+    if (last) prevRange = last; // sujétate a la última con hora (ej. la rutina)
+  }
+
+  // --- decide hora de inicio ---
+  let start;
+  if (prevRange && nextRange) {
+    const gap = (nextRange.start.h * 60 + nextRange.start.m) - (prevRange.end.h * 60 + prevRange.end.m);
+    start = (gap >= dur) ? prevRange.end : addMinutes(nextRange.start, -dur);
+  } else if (prevRange) {
+    start = prevRange.end;                  // justo después de la anterior (rutina incluida)
+  } else if (nextRange) {
+    start = addMinutes(nextRange.start, -dur);
   } else {
     const now = new Date();
-    start = roundToNext15({ h: now.getHours(), m: now.getMinutes() });
+    start = { h: now.getHours(), m: now.getMinutes() };
   }
+
+  // redondeo y guardado
+  start = roundToNext15(start);
+  if (start.h > 23 || (start.h === 23 && start.m > 45)) start = { h: 23, m: 45 };
   const end = addMinutes(start, dur);
 
-  // 3) Guarda en DB y marca que ya tiene hora
   await supabase
     .from('tasks')
     .update({ start_time: fmtHHMM(start), end_time: fmtHHMM(end) })
@@ -867,3 +957,4 @@ async function asignarHoraAlSoltar(el) {
 
   el.dataset.sinHora = '0';
 }
+
