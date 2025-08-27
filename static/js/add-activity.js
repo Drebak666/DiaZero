@@ -3,6 +3,30 @@ import { supabase } from './supabaseClient.js';
 import { guardarReceta } from './recetas.js'; // si no existe, no pasa nada con los guards
 
 // ---------- util ----------
+// Devuelve la lista de fechas únicas, en el orden en que aparecen
+function uniqueDates(rows){
+  return [...new Set(rows.map(c => c.date || 'sin-fecha'))];
+}
+
+// Devuelve todas las citas que caen en los primeros N días únicos
+function pickDays(rows, dayCount){
+  const days = uniqueDates(rows).slice(0, dayCount);
+  return rows.filter(c => days.includes(c.date || 'sin-fecha'));
+}
+
+
+// Suma minutos a un "HH:MM" y devuelve "HH:MM" (clamp a 23:59)
+function addMinutesToHHMM(hhmm, mins) {
+  if (!hhmm) return '';
+  const [h, m] = hhmm.split(':').map(Number);
+  let total = h * 60 + m + mins;
+  if (total < 0) total = 0;
+  if (total > 23 * 60 + 59) total = 23 * 60 + 59;   // no cruzamos de día
+  const hh = String(Math.floor(total / 60)).padStart(2, '0');
+  const mm = String(total % 60).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
 function mostrarBloqueAlimentacion() {
   document.getElementById('grupo-nombre-descripcion')?.classList.remove('oculto');
   document.getElementById('formularios-actividad')?.classList.remove('oculto');
@@ -54,6 +78,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   inputNuevoRequisito = document.getElementById('nuevo-requisito-cita');
   btnAñadirRequisito = document.getElementById('btn-añadir-requisito-cita');
+
+    // --- Cita: hora fin auto = inicio + 2h ---
+  const citaStart = document.getElementById('cita-hora-inicio');
+  const citaEnd   = document.getElementById('cita-hora-fin');
+
+  function autoEndFromStart() {
+    const v = citaStart?.value || '';
+    if (!v) { 
+      if (citaEnd) { 
+        if (citaEnd.dataset.autofill === '1') citaEnd.value = '';
+        citaEnd.dataset.autofill = '1';
+      }
+      return;
+    }
+    if (!citaEnd) return;
+    // Solo autocompletamos si el fin está vacío o sigue en modo autofill
+    if (!citaEnd.value || citaEnd.dataset.autofill === '1') {
+      citaEnd.value = addMinutesToHHMM(v, 120);
+      citaEnd.dataset.autofill = '1'; // marcado como “auto”
+    }
+  }
+
+  // Si el usuario toca manualmente la hora fin, desactivamos el autofill
+  citaEnd?.addEventListener('input', () => { citaEnd.dataset.autofill = '0'; });
+
+  // Recalcular fin cada vez que cambia el inicio
+  citaStart?.addEventListener('input', autoEndFromStart);
+  citaStart?.addEventListener('change', autoEndFromStart);
+
   // === GRUPOS: cargar los del admin y rellenar selects ===
   
 
@@ -520,6 +573,24 @@ cargarSelectsGrupos();
       formToShow.classList.remove('oculto');
       formToShow.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+    // --- inicializar fin auto cuando se muestra Cita ---
+if (tipo === 'Cita') {
+  const startEl = document.getElementById('cita-hora-inicio');
+  const endEl   = document.getElementById('cita-hora-fin');
+
+  // marcamos que el fin está en modo autocompletar
+  if (endEl) {
+    if (!endEl.value) endEl.value = '';  // limpio por si quedó algo
+    endEl.dataset.autofill = '1';
+  }
+
+  // si ya hay hora de inicio, dispara el cálculo ahora mismo
+  if (startEl && startEl.value) {
+    const evt = new Event('change');
+    startEl.dispatchEvent(evt); // llamará a autoEndFromStart()
+  }
+}
+
 
     if (tipo === 'Ingrediente') activarAutocompleteIngrediente();
     else desactivarAutocompleteIngrediente();
@@ -568,18 +639,15 @@ cargarSelectsGrupos();
 const descripcion = (descripcionInput?.value || '').trim();
 if (!tipoSeleccionado || !descripcion) return;
 
-// 🔒 Bloqueo duro si no hay usuario activo
-const usuario = localStorage.getItem('usuario_actual');
-if (!usuario) {
-  alert("No hay usuario activo. Inicia sesión antes de guardar.");
-  return;
-}
+// 🔒 Usuario autenticado (UID real)
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) { alert("No hay usuario autenticado."); return; }
+const uid = user.id;
 
-// 👇 Base del objeto a insertar en cualquier tipo
-let dataToSave = { description: descripcion, usuario };
+// 👇 Base del objeto a insertar en cualquier tipo (siempre UID)
+let dataToSave = { description: descripcion, usuario: uid };
 
-console.log('[DEBUG] usuario(localStorage):', usuario);
-console.log('[DEBUG] dataToSave base:', dataToSave);
+
 
 
 
@@ -587,7 +655,8 @@ console.log('[DEBUG] dataToSave base:', dataToSave);
     // Receta
     if (tipoSeleccionado === 'Receta') {
       if (typeof guardarReceta === 'function') {
-        await guardarReceta(usuario);
+        await guardarReceta(uid);
+
         form.reset();
         formulariosActividad.classList.add('oculto');
         tipoSeleccionado = null;
@@ -659,7 +728,6 @@ if (tipoSeleccionado === 'Ingrediente') {
     dataToSave.calorias     = calorias;
     dataToSave.proteinas    = proteinas;
 
-    console.log('[DEBUG] usuario(localStorage):', usuario);
     console.log('[DEBUG] payload ingredientes:', dataToSave);
 
     // === 1) Upsert en ingredientes_base (solo base/nutrición) ===
@@ -676,7 +744,7 @@ if (tipoSeleccionado === 'Ingrediente') {
         description: descripcion,        
         precio: precio,
         supermercado: supermercado,
-        usuario   // ← opcional
+        usuario: uid   // ← opcional
       }], { onConflict: 'nombre' })
       .select('id');
     if (upsertError) console.warn('Aviso upsert ingredientes_base:', upsertError.message);
@@ -761,7 +829,8 @@ dataToSave.grupo_id = document.querySelector('.select-grupo[data-target="cita"]'
 
         const hoyStr = new Date().toISOString().split('T')[0];
         const taskRows = normalizedReqs.map((req, idx) => ({
-          usuario,
+            usuario: uid,                     // ← antes era `usuario`
+
           description: `[Cita] ${inserted.description} — ${req.text}`,
           due_date: hoyStr,
           is_completed: !!req.checked,

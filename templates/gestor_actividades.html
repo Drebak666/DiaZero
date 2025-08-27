@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}" />
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <title>Gestor de Actividades</title>
+  <style>
+    .filters { display:grid; grid-template-columns: repeat(6, minmax(120px,1fr)); gap:10px; }
+    .listado { display:flex; flex-direction:column; gap:14px; margin-top:12px; }
+    .fecha-grupo h3{ margin:.25rem 0 .35rem }
+    .actividad-row{ display:grid; grid-template-columns: 140px 1fr auto; gap:10px;
+                     align-items:center; padding:10px; border:1px solid #333; border-radius:12px }
+    .actividad-row small{ opacity:.7 }
+    .chip{ padding:2px 8px; border-radius:999px; border:1px solid #444; font-size:.8rem }
+    .chip.tarea{ border-color:#3a86ff } .chip.rutina{ border-color:#ffbe0b }
+    .chip.cita{ border-color:#fb5607 } .chip.nota{ border-color:#7f8c8d }
+    .row-actions{ display:flex; gap:8px }
+    .row-actions .icon { width:36px; height:36px; display:grid; place-items:center;
+                         border:1px solid #444; border-radius:10px; cursor:pointer }
+    dialog{ border:none; border-radius:14px; max-width:520px; width:92%; background:#111; color:#eee }
+    dialog .dlg-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:12px }
+  </style>
+</head>
+<body>
+  <header class="admin-header">
+    <a href="{{ url_for('html.serve_index') }}" class="admin-back">
+      <i class="fas fa-arrow-left"></i><span>Volver</span>
+    </a>
+    <h1>Gestor de Actividades</h1>
+  </header>
+
+  <main class="admin-container">
+    <div class="admin-card">
+      <div class="filters">
+        <input id="f-q" type="text" placeholder="Buscar…" />
+        <select id="f-tipo">
+          <option value="">Tipo (todos)</option>
+          <option value="tarea">Tarea</option>
+          <option value="rutina">Rutina</option>
+          <option value="cita">Cita</option>
+        </select>
+        <select id="f-estado">
+          <option value="">Estado (todos)</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="completado">Completado</option>
+        </select>
+        <input id="f-desde" type="date" />
+        <input id="f-hasta" type="date" />
+        <button id="f-aplicar" class="admin-btn">Filtrar</button>
+      </div>
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+        <label><input id="f-solo-mias" type="checkbox" /> Solo mías</label>
+        <label><input id="f-incluir-compartidas" type="checkbox" checked /> Incluir compartidas</label>
+      </div>
+    </div>
+
+    <div class="listado" id="listado"></div>
+  </main>
+
+  <!-- Modal Compartir -->
+  <dialog id="dlg-compartir">
+    <form method="dialog" id="form-compartir">
+      <h3 style="margin:0 0 .5rem">Compartir actividad</h3>
+      <p id="dlg-titulo" style="opacity:.8; margin:.25rem 0 .75rem"></p>
+      <div id="dlg-miembros" style="display:grid; grid-template-columns:1fr 1fr; gap:8px"></div>
+      <div class="dlg-actions">
+        <button class="btn-cancel" value="cancel">Cancelar</button>
+        <button class="btn-success" id="btn-guardar-compartir" value="ok">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- IMPORTANTE: cliente de Supabase antes del JS del gestor -->
+  <script type="module" src="{{ url_for('static', filename='js/supabaseClient.js') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='js/gestor-actividades.js') }}"></script>
+</body>
+</html>

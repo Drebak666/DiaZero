@@ -2,6 +2,7 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, current_app
 from datetime import datetime, timedelta
 
+
 html_bp = Blueprint("html", __name__)
 
 @html_bp.route('/login')
@@ -20,6 +21,12 @@ def reproductor():
 def calendario():
     return render_template('calendario.html')
 
+@html_bp.route('/gestor-actividades', endpoint='gestor_actividades')
+def gestor_actividades():
+    return render_template('gestor_actividades.html')
+
+        
+    
 @html_bp.route('/citas')
 def serve_citas():
     return render_template('citas.html')

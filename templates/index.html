@@ -33,51 +33,15 @@
 
 
 <main>
-  <!-- Próximas Citas -->
-  <section class="main-section" id="proximas-citas">
-    <div class="section-content" id="citas-container"></div>
-    <div class="ver-mas-container">
-      <button class="btn-ver-mas" id="ver-mas-citas">
-        <i class="fas fa-chevron-down"></i> Ver más
-      </button>
-    </div>
+<section class="admin-card">
+  <div class="section-content">
+    <div id="ultimas-citas"><em>Cargando…</em></div>
+  </div>
+</section>
 
-    <!-- Form edición cita -->
-    <div class="oculto form-modal" id="form-editar-cita">
-      <form id="editar-formulario" class="form-editar-cita">
-        <input id="editar-id" type="hidden" />
-        <div class="form-group" id="description-group">
-          <label for="editar-descripcion">Descripción:</label>
-          <input id="editar-descripcion" type="text" placeholder="Descripción" />
-        </div>
-        <div class="form-group" id="date-group">
-          <label for="editar-fecha">Fecha:</label>
-          <input id="editar-fecha" type="date" />
-        </div>
-        <div class="form-row" id="time-row">
-          <div class="form-group flex-item">
-            <label for="editar-hora-inicio">Hora de Inicio:</label>
-            <input id="editar-hora-inicio" type="time" />
-          </div>
-          <div class="form-group flex-item">
-            <label for="editar-hora-fin">Hora de Fin:</label>
-            <input id="editar-hora-fin" type="time" />
-          </div>
-        </div>
-        <div class="form-group" id="requirements-label-input-group">
-          <label for="nuevo-requisito">Añadir Requisito:</label>
-          <input id="nuevo-requisito" type="text" placeholder="Ej: DNI, Informe médico" />
-        </div>
-        <div id="requirements-list-and-button-area">
-          <div class="requirements-list" id="requisitos-container"></div>
-          <button type="button" id="añadir-requisito" class="btn-secondary">Añadir requisito</button>
-        </div>
-        <div class="form-buttons">
-          <button type="submit" class="btn-success">Guardar Cambios</button>
-          <button type="button" id="recoger-edicion" class="btn-cancel">Recoger</button>
-        </div>
-      </form>
-    </div>
+
+
+
 
     <!-- Form edición tarea -->
     <div class="oculto form-modal" id="form-editar-tarea">
@@ -265,75 +229,8 @@
             </div>
           </div>
 
-          <!-- Ingrediente -->
-          <div class="tipo-formulario oculto" id="form-ingrediente">
-            <div class="form-grid-3cols">
-              <div class="form-group">
-                <label for="ingrediente-supermercado">Supermercado:</label>
-                <select id="ingrediente-supermercado">
-                  <option value="Lidl">Lidl</option>
-                  <option value="Mercadona">Mercadona</option>
-                  <option value="Carrefour">Carrefour</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="ingrediente-precio">Precio:</label>
-                <input id="ingrediente-precio" type="number" step="0.01" />
-              </div>
-              <div class="form-group">
-                <label for="ingrediente-cantidad">Cantidad:</label>
-                <input id="ingrediente-cantidad" type="number" step="0.01" />
-              </div>
-            </div>
-            <div class="form-grid-3cols">
-              <div class="form-group">
-                <label for="ingrediente-unidad">Unidad:</label>
-                <select id="ingrediente-unidad">
-                  <option value="g">g</option>
-                  <option value="ml">ml</option>
-                  <option value="unidad">unidad</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="ingrediente-calorias">Calorías:</label>
-                <input id="ingrediente-calorias" type="number" />
-              </div>
-              <div class="form-group">
-                <label for="ingrediente-proteinas">Proteínas:</label>
-                <input id="ingrediente-proteinas" type="number" step="0.1" />
-              </div>
-            </div>
-          </div>
 
-          <!-- Receta -->
-          <div class="tipo-formulario oculto" id="form-receta">
-            <div class="form-group">
-              <label for="receta-instrucciones">Instrucciones:</label>
-              <textarea id="receta-instrucciones" name="receta_instrucciones" placeholder="Pasos para preparar la receta..." rows="5"></textarea>
-            </div>
-            <div class="form-group">
-              <label>Ingredientes de la Receta:</label>
-              <div class="requirements-list" id="receta-ingredientes-container"></div>
-              <div class="add-requirement-input">
-                <select class="select-full-width" id="receta-seleccionar-ingrediente">
-                  <option value="">Selecciona un ingrediente</option>
-                </select>
-                <input id="receta-cantidad-ingrediente" placeholder="Cantidad" step="0.01" type="number"/>
-                <select id="receta-unidad-ingrediente">
-                  <option value="g">g</option>
-                  <option value="ml">ml</option>
-                  <option value="unidad">unidad</option>
-                </select>
-                <button class="btn-secondary" id="btn-añadir-ingrediente-receta" type="button">Añadir Ingrediente</button>
-              </div>
-            </div>
-            <div id="totales-receta" style="margin-top: 10px;">
-              <p><strong>Precio total:</strong> <span id="total-precio">0.00</span> €</p>
-              <p><strong>Calorías totales:</strong> <span id="total-calorias">0</span> kcal</p>
-              <p><strong>Proteínas totales:</strong> <span id="total-proteinas">0</span> g</p>
-            </div>
-          </div>
-        </div>
+
 
         <div class="form-buttons oculto" id="botones-actividad">
           <button class="btn-success btn-large" id="btn-guardar-actividad" type="submit">Guardar</button>
@@ -341,6 +238,86 @@
         </div>
       </form>
     </div>
+
+
+<!-- Modal: Editar Cita (completo) -->
+<div class="form-modal oculto" id="modal-editar-cita">
+  <form id="form-editar-cita" class="form-editar-cita">
+    <h3>Editar Cita</h3>
+    <input type="hidden" id="edit-cita-id" />
+
+    <div class="form-group">
+      <label for="edit-cita-desc">Descripción:</label>
+      <input id="edit-cita-desc" type="text" placeholder="Descripción de la cita" />
+    </div>
+
+    <div class="form-grid-2cols">
+      <div class="form-group">
+        <label for="edit-cita-fecha">Fecha:</label>
+        <input id="edit-cita-fecha" type="date" />
+      </div>
+      <div class="form-group">
+        <label for="edit-cita-inicio">Hora de Inicio:</label>
+        <input id="edit-cita-inicio" type="time" />
+      </div>
+    </div>
+
+    <div class="form-grid-2cols">
+      <div class="form-group">
+        <label for="edit-cita-req-input">Añadir Requisito:</label>
+        <input id="edit-cita-req-input" type="text" placeholder="Ej: DNI, Informe médico" />
+      </div>
+      <div class="form-group">
+        <label for="edit-cita-fin">Hora de Fin:</label>
+        <input id="edit-cita-fin" type="time" />
+      </div>
+    </div>
+
+    <div class="form-grid-2cols" style="align-items:flex-start;">
+      <div class="form-group" style="grid-column:1 / span 1;">
+        <div id="edit-cita-req-list" class="req-chip-box"></div>
+      </div>
+      <div class="form-group" style="display:flex; align-items:flex-start; justify-content:flex-end;">
+        <button type="button" id="btn-add-req" class="btn-secondary" style="min-width:180px;">Añadir requisito</button>
+      </div>
+    </div>
+
+    <div class="form-buttons">
+      <button type="submit" class="btn-success">Guardar Cambios</button>
+      <button type="button" id="cerrar-modal-cita" class="btn-cancel">Recoger</button>
+    </div>
+  </form>
+</div>
+
+<!-- Modal: Compartir -->
+<div class="form-modal oculto" id="modal-compartir">
+  <form id="form-compartir">
+    <h3>Compartir</h3>
+    <input type="hidden" id="share-id" />
+
+    <div class="form-grid-2cols">
+      <div class="form-group">
+        <label>Grupo</label>
+        <select id="share-grupo">
+          <option value="">— Ninguno —</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Personas</label>
+        <div id="share-personas" class="checklist"></div>
+      </div>
+    </div>
+
+    <div class="form-buttons" style="gap:8px;">
+      <button type="button" id="share-clear" class="btn-cancel">Quitar todo</button>
+      <div style="flex:1"></div>
+      <button type="button" id="share-cancel" class="btn-cancel">Cancelar</button>
+      <button type="submit" class="btn-success">Guardar</button>
+    </div>
+  </form>
+</div>
+
   </section>
 
   <!-- Agenda de Hoy -->
@@ -363,6 +340,11 @@
       <a class="icon-button" href="/registro"><i class="fas fa-clipboard-check"></i><span>Registro</span></a>
       <a class="icon-button" href="/calendario"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
       <a class="icon-button" href="/ejercicio"><i class="fas fa-dumbbell"></i><span>Ejercicio</span></a>
+
+      <!-- ====== SCRIPTS ====== -->
+
+<script type="module" src="/static/js/gestor-actividades.js"></script>
+<script type="module" src="/static/js/admin-groups.js"></script>
 
  
        
@@ -404,7 +386,7 @@
  
 <script src="{{ url_for('static', filename='js/supabaseClient.js') }}" type="module"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}" type="module"></script>
-<script src="{{ url_for('static', filename='js/upcoming-appointments.js') }}" type="module"></script>
+<script type="module" src="{{ url_for('static', filename='js/ultimas-citas.js') }}"></script>
 {% if cargar_add_activity %}
   <script src="{{ url_for('static', filename='js/add-activity.js') }}" type="module"></script>
 {% endif %}
@@ -468,7 +450,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
+<button id="quick-mic-btn" title="Capturar por voz">
+  <i class="fas fa-microphone"></i>
+</button>
 
+<!-- Panel de resultado -->
+<div id="quick-mic-panel" hidden>
+  <div class="qmp-header">
+    <strong>Captura rápida</strong>
+    <button type="button" id="qmp-close" aria-label="Cerrar">×</button>
+  </div>
+  <div class="qmp-body">
+    <label>Nombre</label>
+    <input id="qmp-name" type="text" placeholder="Nombre" />
+    <label>Teléfono</label>
+    <input id="qmp-phone" type="text" inputmode="tel" placeholder="+34 600 123 456" />
+    <div class="qmp-actions">
+      <button id="qmp-save-note" class="primary">Guardar en Notas</button>
+      <button id="qmp-copy">Copiar</button>
+    </div>
+    <div id="qmp-status" class="qmp-status"></div>
+  </div>
+</div>
 
 
 </body>

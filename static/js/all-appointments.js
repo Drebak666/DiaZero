@@ -254,18 +254,20 @@ async function cargarTotalCitas() {
 
 async function cargarCitas(pagina = 1) {
     paginaActual = pagina;
-    const usuario = getUsuarioActivo();
 
 
     const desde = (paginaActual - 1) * citasPorPagina;
 
-    const usuario = getUsuarioActivo();
-    const { data, error, count } = await supabase
+   const { data: { user } } = await supabase.auth.getUser();
+const uid = user.id;
+
+const { data, error, count } = await supabase
   .from('appointments')
   .select('*', { count: 'exact' })
-  .eq('usuario', usuario) // ✅ FILTRO AÑADIDO AQUÍ
+  .eq('usuario', uid)
   .order('date', { ascending: true })
   .range(desde, desde + citasPorPagina - 1);
+
 
     if (error) {
         container.innerHTML = '<p>Error al cargar las citas.</p>';

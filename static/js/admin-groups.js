@@ -1,82 +1,85 @@
-// static/js/admin-groups.js
+// Admin grupos (solo actúa si la sección existe)
 import { supabase } from "./supabaseClient.js";
 
-const username = localStorage.getItem("usuario_actual");
+// ───────── helpers ─────────
+const $ = (id) => document.getElementById(id);
+const on = (id, ev, fn) => { const n = $(id); if (n) n.addEventListener(ev, fn); };
+const ready = (fn) => { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); };
 
-// UI refs
-const grpNombre   = document.getElementById("grp-nombre");
-const btnCrear    = document.getElementById("grp-crear");
-const misGrupos   = document.getElementById("mis-grupos");
-const panelM      = document.getElementById("panel-miembros");
-const nombreGA    = document.getElementById("nombre-grupo-actual");
-const mUser       = document.getElementById("mbr-username");
-const mRol        = document.getElementById("mbr-rol");
-const btnMAdd     = document.getElementById("mbr-agregar");
-const ulMiembros  = document.getElementById("lista-miembros");
+// ───────── refs (pueden ser null si quitaste inputs) ─────────
+const grpNombre   = $("grp-nombre");
+const btnCrear    = $("grp-crear");
+const misGrupos   = $("mis-grupos");
+const panelM      = $("panel-miembros");
+const nombreGA    = $("nombre-grupo-actual");
+const mUser       = $("mbr-username");
+const mRol        = $("mbr-rol");
+const btnMAdd     = $("mbr-agregar");
+const ulMiembros  = $("lista-miembros");
 
 let grupoActual = null;
 
 // Crear grupo
 btnCrear?.addEventListener("click", async (e) => {
   e.preventDefault();
-  const nombre = (grpNombre.value || "").trim();
+  const nombre = (grpNombre?.value || "").trim();
   if (!nombre) return alert("Pon un nombre de grupo.");
 
-  const username = localStorage.getItem("usuario_actual") || "";
+  const { data:{ user } } = await supabase.auth.getUser();
+  if (!user) return alert("No hay usuario autenticado.");
+  const uid = user.id;
 
-  // 1) resolver mi UUID en 'usuarios'
-  const { data: me, error: e1 } = await supabase
-    .from("usuarios")
-    .select("id")
-    .eq("username", username)
-    .maybeSingle();
-  if (e1 || !me) return alert("No pude obtener tu id de usuario.");
-
-  // 2) crear grupo con admin_id
-  const { error: e2 } = await supabase
+  const { data: g, error: e2 } = await supabase
     .from("grupos")
-    .insert({ nombre, admin_id: me.id });
+    .insert({ nombre, admin_id: uid })
+    .select("id")
+    .single();
   if (e2) return alert("Error creando grupo: " + e2.message);
 
-  grpNombre.value = "";
+  const { error: e3 } = await supabase
+    .from("miembros_grupo")
+    .insert({ grupo_id: g.id, usuario_id: uid, role: "admin" });
+  if (e3) return alert("Grupo creado pero no se pudo añadirte como miembro: " + e3.message);
+
+  if (grpNombre) grpNombre.value = "";
   await cargarMisGrupos();
   alert("Grupo creado.");
 });
 
-
+// Lista TODOS los grupos donde soy miembro
 async function cargarMisGrupos() {
+  if (!misGrupos) return; // página sin sección → no hacer nada
   misGrupos.innerHTML = "Cargando…";
 
-  const username = localStorage.getItem("usuario_actual") || "";
-  const { data: me, error: e1 } = await supabase
-    .from("usuarios")
-    .select("id")
-    .eq("username", username)
-    .maybeSingle();
-  if (e1 || !me) {
-    misGrupos.textContent = "Error resolviendo usuario.";
-    return;
-  }
+  const { data:{ user } } = await supabase.auth.getUser();
+  if (!user) { misGrupos.textContent = "No autenticado."; return; }
+  const uid = user.id;
 
-  const { data, error } = await supabase
-    .from("grupos")
-    .select("*")
-    .eq("admin_id", me.id)
-    .order("nombre", { ascending: true });
+  // 1) IDs de grupos donde soy miembro
+  const { data: memb, error: e1 } = await supabase
+    .from("miembros_grupo")
+    .select("grupo_id")
+    .eq("usuario_id", uid);
 
-  if (error) {
-    misGrupos.textContent = "Error cargando grupos.";
-    return;
-  }
-
-  if (!data || data.length === 0) {
-    misGrupos.innerHTML = "<p>No tienes grupos todavía.</p>";
-    panelM.classList.add("oculto");
+  if (e1) { misGrupos.textContent = "Error cargando grupos."; return; }
+  const ids = (memb || []).map(r => r.grupo_id);
+  if (!ids.length) {
+    misGrupos.innerHTML = "<p>No perteneces a ningún grupo todavía.</p>";
+    panelM?.classList.add("oculto");
     grupoActual = null;
     return;
   }
 
-  misGrupos.innerHTML = data.map(g => `
+  // 2) Datos de esos grupos
+  const { data: grupos, error: e2 } = await supabase
+    .from("grupos")
+    .select("id, nombre")
+    .in("id", ids)
+    .order("nombre", { ascending: true });
+
+  if (e2) { misGrupos.textContent = "Error cargando grupos."; return; }
+
+  misGrupos.innerHTML = grupos.map(g => `
     <button class="btn-secondary" data-gid="${g.id}" data-nombre="${g.nombre}">
       ${g.nombre}
     </button>
@@ -85,64 +88,54 @@ async function cargarMisGrupos() {
   misGrupos.querySelectorAll("button").forEach(b => {
     b.addEventListener("click", async () => {
       grupoActual = { id: b.dataset.gid, nombre: b.dataset.nombre };
-      nombreGA.textContent = grupoActual.nombre;
-      panelM.classList.remove("oculto");
+      if (nombreGA) nombreGA.textContent = grupoActual.nombre;
+      panelM?.classList.remove("oculto");
       await cargarMiembros();
     });
   });
 }
 
-
+// Carga miembros del grupo seleccionado
 async function cargarMiembros() {
+  if (!ulMiembros) return;
   ulMiembros.innerHTML = "Cargando…";
+  if (!grupoActual) return;
 
-  // Hacemos join con 'usuarios' para obtener el username
   const { data, error } = await supabase
     .from("miembros_grupo")
-    .select("id, role, usuarios:usuario_id ( username )")
+    .select("usuario_id, role, usuarios:usuario_id ( username, email )")
     .eq("grupo_id", grupoActual.id)
     .order("role", { ascending: true });
 
-  if (error) {
-    ulMiembros.textContent = "Error cargando miembros.";
-    return;
-  }
+  if (error) { ulMiembros.textContent = "Error cargando miembros."; return; }
 
   ulMiembros.innerHTML = (data || []).map(m =>
-    `<li>${m.usuarios?.username || '—'} — <em>${m.role}</em></li>`
+    `<li>${m.usuarios?.username || m.usuarios?.email || m.usuario_id} — <em>${m.role}</em></li>`
   ).join("");
 }
 
-
+// Añadir miembro por username
 btnMAdd?.addEventListener("click", async () => {
   if (!grupoActual) return alert("Selecciona un grupo.");
-  const u = (mUser.value || "").trim();
+  const u = (mUser?.value || "").trim();
   if (!u) return alert("Indica el username del miembro.");
 
-  // 1) Buscar el UUID del usuario por su username
   const { data: urow, error: ue } = await supabase
     .from("usuarios")
     .select("id")
     .eq("username", u)
     .maybeSingle();
-
   if (ue || !urow) return alert("No existe ese username.");
 
-  // 2) Insertar usando usuario_id (NO username)
   const { error } = await supabase
     .from("miembros_grupo")
-    .insert({
-      grupo_id: grupoActual.id,
-      usuario_id: urow.id,
-      role: mRol.value || "miembro"
-    });
-
+    .insert({ grupo_id: grupoActual.id, usuario_id: urow.id, role: (mRol?.value || "miembro") });
   if (error) return alert("Error añadiendo miembro: " + error.message);
-  mUser.value = "";
+
+  if (mUser) mUser.value = "";
   await cargarMiembros();
   alert("Miembro añadido.");
 });
 
-
-// arranque
-cargarMisGrupos();
+// Arranque seguro
+ready(() => { if (misGrupos) cargarMisGrupos(); });

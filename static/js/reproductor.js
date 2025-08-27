@@ -44,31 +44,20 @@ function publishPlayerState(overridePlaying = null){
 // Si no existe (error al seleccionar), reintentamos sin ese filtro para no romper.
 // Cargar canciones del usuario actual, evitando el 400 permanente
 async function fetchSongs(){
-  const email = localStorage.getItem('usuario_actual') || '';
-  let hasUsuario = localStorage.getItem('music_has_usuario'); // "yes" | "no" | null
-
+  const email = (localStorage.getItem('usuario_actual') || '').trim();
   let data = null, error = null;
 
-  // Intento con filtro por email SOLO si no sabemos que falla
-  if (hasUsuario !== 'no') {
+  // 1) Si hay email -> filtra por usuario
+  if (email) {
     ({ data, error } = await supabase
       .from('music')
       .select('id,url,artist,title,created_at,usuario')
       .eq('usuario', email)
       .order('created_at', { ascending: false }));
-
-    if (!error) {
-      localStorage.setItem('music_has_usuario', 'yes');
-    } else {
-      // Memoriza que no existe para no volver a intentarlo
-      localStorage.setItem('music_has_usuario', 'no');
-      hasUsuario = 'no';
-      data = null; // forzar fallback
-    }
   }
 
-  // Fallback (sin filtro, ni columna usuario)
-  if (!data) {
+  // 2) Si NO hay email o hubo error -> sin filtro (no rompas la UI)
+  if (!email || error) {
     ({ data, error } = await supabase
       .from('music')
       .select('id,url,artist,title,created_at')
@@ -89,6 +78,7 @@ async function fetchSongs(){
   }
   aplicarFiltro();
 }
+
 
 
 // Render de la lista
