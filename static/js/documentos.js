@@ -1,6 +1,5 @@
 // documentos.js
 import { supabase } from "./supabaseClient.js";
-import { getUsuarioActivo } from "./usuario.js";
 
 /* ===== Utilidades de fecha ===== */
 function formatDMY(dateStr){
@@ -44,24 +43,20 @@ async function cargarDocumentos() {
   lista.innerHTML = "";
   selectorTipo.innerHTML = '<option value="todos">Todos</option>';
 
-const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   const uid = user?.id || null;
-  const legacy = await getUsuarioActivo(); // por si hay docs viejos con nombre
-  if (!uid && !legacy) return;
+  if (!uid) return;
 
-let query = supabase.from("documentos").select("*");
-query = uid
-  ? query.in("usuario", [uid, legacy].filter(Boolean))
-  : query.eq("usuario", legacy);
+  let query = supabase.from("documentos")
+    .select("*")
+    .eq("owner_id", uid)
+    .order("caduca_el", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
 
-const { data, error } = await query
-  .order("caduca_el", { ascending: true, nullsFirst: false })
-  .order("created_at", { ascending: true });
-
-
+  const { data, error } = await query;
   if (error) { console.error("Error cargando documentos:", error); return; }
 
-  // Rellenar filtro de tipos (arreglo el bug de Set)
+  // Rellenar filtro de tipos
   const tipos = Array.from(new Set((data || []).map(d => d.tipo).filter(Boolean)));
   tipos.forEach(t => {
     const o = document.createElement("option");
@@ -72,7 +67,7 @@ const { data, error } = await query
   (data || []).forEach(doc => renderDocumento(doc));
 }
 
-/* ===== Pintar tarjeta (centrada + botones 3 columnas) ===== */
+/* ===== Pintar tarjeta ===== */
 function renderDocumento(doc) {
   const div = document.createElement("div");
   div.className = "doc-item mb-2";
@@ -125,12 +120,10 @@ function renderDocumento(doc) {
   btnBorrar.textContent = "Borrar";
   btnBorrar.onclick = () => borrarDocumento(doc.id);
 
-  // Acciones en 3 columnas
   const acciones = document.createElement("div");
   acciones.className = "doc-actions";
   acciones.append(enlace, btnEditar, btnBorrar);
 
-  // Montaje (una sola vez – eliminamos la duplicación que tenías). :contentReference[oaicite:1]{index=1}
   div.append(nombre, tipo);
   if (doc.caduca_el) div.append(fechaTxt);
   div.append(br, acciones);
@@ -143,35 +136,25 @@ async function subirArchivo(archivo) {
   const nombreArchivo = `${Date.now()}_${archivo.name}`;
   const { data, error } = await supabase.storage.from("documentos").upload(nombreArchivo, archivo);
   if (error) { console.error("Error subiendo archivo:", error); return null; }
-  return data.path; // se guarda como archivo_url
+  return data.path;
 }
 
-/* ===== Crear/actualizar tarea de aviso a -30 días ===== */
-async function upsertTareaCaducidad({ documentId, nombre, caducaEl, usuario }) {
+/* ===== Crear/actualizar tarea de aviso ===== */
+async function upsertTareaCaducidad({ documentId, nombre, caducaEl, owner_id }) {
   if (!caducaEl) return;
   const due = reminderDateFrom(caducaEl);
 
   const row = {
     document_id: documentId,
     description: `Renovar: ${nombre}`,
-    due_date: due,   // hoy si faltan ≤30 días; si no, -30 días
-    usuario: usuario
+    due_date: due,
+    owner_id
   };
 
-  // Limpia otras fechas de ese doc y luego upsert
-  await supabase
-    .from("tasks")
-    .delete()
-    .eq("document_id", documentId)
-    .neq("due_date", due);
-
-  const { error } = await supabase
-    .from("tasks")
-    .upsert([row], { onConflict: "document_id,due_date" });
-
+  await supabase.from("tasks").delete().eq("document_id", documentId).neq("due_date", due);
+  const { error } = await supabase.from("tasks").upsert([row], { onConflict: "document_id,due_date" });
   if (error) console.error("Error creando tarea de caducidad:", error);
-} // 👈👈👈 Cierra aquí la función
-
+}
 
 /* ===== Guardar / Editar ===== */
 if (formulario) {
@@ -183,13 +166,13 @@ if (formulario) {
     const caducaEl = document.getElementById("caduca_el").value || null;
     const archivo = document.getElementById("archivo").files[0];
     const { data: { user } } = await supabase.auth.getUser();
- const usuario = user?.id || null;
+    const owner_id = user?.id || null;
     const idEditar = formulario.getAttribute("data-id-editar");
 
-    if (!nombre || !tipo || !usuario) return;
+    if (!nombre || !tipo || !owner_id) return;
 
     if (idEditar) {
-      const updateData = { nombre, tipo, caduca_el: caducaEl, usuario };
+      const updateData = { nombre, tipo, caduca_el: caducaEl, owner_id };
       if (archivo) {
         const archivo_url = await subirArchivo(archivo);
         if (!archivo_url) return;
@@ -197,18 +180,18 @@ if (formulario) {
       }
       const { error } = await supabase.from("documentos").update(updateData).eq("id", idEditar);
       if (error) { console.error("Error al actualizar:", error); return; }
-      await upsertTareaCaducidad({ documentId: idEditar, nombre, caducaEl, usuario });
+      await upsertTareaCaducidad({ documentId: idEditar, nombre, caducaEl, owner_id });
     } else {
       if (!archivo) return;
       const archivo_url = await subirArchivo(archivo);
       if (!archivo_url) return;
       const { data, error } = await supabase
         .from("documentos")
-        .insert([{ nombre, tipo, archivo_url, usuario, caduca_el: caducaEl }])
+        .insert([{ nombre, tipo, archivo_url, owner_id, caduca_el: caducaEl }])
         .select("id")
         .single();
       if (error) { console.error("Error guardando documento:", error); return; }
-      await upsertTareaCaducidad({ documentId: data.id, nombre, caducaEl, usuario });
+      await upsertTareaCaducidad({ documentId: data.id, nombre, caducaEl, owner_id });
     }
 
     formulario.reset();
@@ -239,22 +222,21 @@ async function borrarDocumento(id) {
 if (selectorTipo) {
   selectorTipo.addEventListener("change", async () => {
     const tipoSel = selectorTipo.value;
-const { data: { user } } = await supabase.auth.getUser();
-   const uid = user?.id || null;
-   const legacy = await getUsuarioActivo();
-   let query = supabase.from("documentos").select("*");
-   query = uid
-     ? query.in("usuario", [uid, legacy].filter(Boolean))
-     : query.eq("usuario", legacy)
-     .order("caduca_el", { ascending: true })
-     .order("created_at", { ascending: true });
+    const { data: { user } } = await supabase.auth.getUser();
+    const uid = user?.id || null;
+    if (!uid) return;
+
+    let query = supabase.from("documentos")
+      .select("*")
+      .eq("owner_id", uid)
+      .order("caduca_el", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
 
     if (tipoSel !== "todos") query = query.eq("tipo", tipoSel);
 
     const { data, error } = await query;
     if (error) { console.error("Error filtrando:", error); return; }
 
-    // Orden estable: caduca primero, luego sin fecha al final
     const docs = (data || []).slice().sort((a,b) => {
       const ta = a.caduca_el ? new Date(a.caduca_el).getTime() : Number.POSITIVE_INFINITY;
       const tb = b.caduca_el ? new Date(b.caduca_el).getTime() : Number.POSITIVE_INFINITY;

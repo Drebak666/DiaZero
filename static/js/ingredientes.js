@@ -16,14 +16,15 @@ export async function guardarIngrediente() {
     return;
   }
 
-const usuario = getUsuarioActivo();
-if (!usuario) {
-  alert("No hay usuario activo. Inicia sesión primero.");
+// obtener uid actual
+const { data: { user } } = await supabase.auth.getUser();
+const usuarioId = user?.id;
+if (!usuarioId) {
+  alert("No hay sesión activa. Inicia sesión primero.");
   return;
 }
 
-
-const { error } = await supabase.from('ingredientes').insert([
+const { error } = await supabase.from('ingredientes_base').insert([
   {
     nombre,
     supermercado,
@@ -32,10 +33,11 @@ const { error } = await supabase.from('ingredientes').insert([
     unidad,
     calorias,
     proteinas,
-    usuario, // 👈 AÑADIR ESTA LÍNEA
+    usuario_id: usuarioId, // 👈 ahora guardamos UID
     fecha_creacion: new Date().toISOString()
   }
 ]);
+
 
 
   if (error) {
@@ -57,12 +59,16 @@ document.getElementById('cancelar-ingrediente').addEventListener('click', (e) =>
 });
 
 async function cargarIngredientes() {
-  const usuario = getUsuarioActivo();
-  const { data, error } = await supabase
-    .from('ingredientes')
-    .select('*')
-    .eq('usuario', usuario)
-    .order('fecha_creacion', { ascending: false });
+  const { data: { user } } = await supabase.auth.getUser();
+const usuarioId = user?.id;
+if (!usuarioId) return;
+
+const { data, error } = await supabase
+  .from('ingredientes')
+  .select('*')
+  .eq('usuario_id', usuarioId)  // 👈 filtrar por UID
+  .order('fecha_creacion', { ascending: false });
+
 
   if (error) {
     console.error('Error al cargar ingredientes:', error);

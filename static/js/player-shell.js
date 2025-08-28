@@ -89,7 +89,7 @@ async function resolveTrackUrl(track) {
 function formatTitle(t){ return t ? `${t.title} — ${t.artist || 'Desconocido'}` : '—'; }
 
 // -------- Core: reproducir desde la cola ----------
-async function playFromQueue(i, resume = true){
+async function playFromQueue(i, resume = true, autoplay = true){
   if (!queue.length) return;
   index = (i + queue.length) % queue.length;
 
@@ -106,19 +106,20 @@ async function playFromQueue(i, resume = true){
   const st = loadState();
   if (resume && st && st.index === index) {
     let pos = Number(st.positionSec) || 0;
-    if (st.playing && st.updatedAt) {
-      pos += Math.max(0, (Date.now() - st.updatedAt) / 1000);
-    }
     try { audio.currentTime = pos; } catch {}
   } else {
     audio.currentTime = 0;
   }
 
-  await audio.play().catch(()=>{});
+  if (autoplay) {
+    await audio.play().catch(()=>{});
+  }
+
   setIcon();
   showShell(true);
   persistState();
 }
+
 
 function playNext(){ if (!queue.length) return; playFromQueue(index + 1, false); }
 function playPrev(){ if (!queue.length) return; playFromQueue(index - 1, false); }
@@ -148,7 +149,6 @@ window.addEventListener('storage', (e) => {
 async function bootFromState(){
   const st = loadState();
 
-  // Mostrar mini-player aunque no haya cola (para que se vea la UI)
   if (!st || !st.queue?.length) {
     showShell(true);
     el.title.textContent = '—';
@@ -159,8 +159,11 @@ async function bootFromState(){
   queue = Array.isArray(st.queue) ? st.queue : [];
   index = Math.min(Math.max(0, st.index|0), queue.length - 1);
 
-  await playFromQueue(index, true);
+  // Si el último estado era "playing", arrancamos
+  const autoplay = !!st.playing;
+  await playFromQueue(index, true, autoplay);
 }
+
 bootFromState();
 
 // Exponer API para otros scripts (por ejemplo, reproductor-local.js)

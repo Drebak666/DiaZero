@@ -57,14 +57,16 @@ await supabase.from('tasks')
   .delete()
   .lt('due_date', hoyStr)
   .eq('is_completed', true)
-  .eq('usuario', uid);
+    .eq('owner_id', uid); // <-- antes 'usuario'
+
 
 // MOVER a hoy las NO completadas anteriores a hoy (solo due_date)
 await supabase.from('tasks')
   .update({ due_date: hoyStr })
   .lt('due_date', hoyStr)
   .eq('is_completed', false)
-  .eq('usuario', uid)
+  .eq('owner_id', uid)   // <-- antes 'usuario'
+
   .is('improvement_id', null); // quítalo si quieres mover también las ligadas a improvements
 
 
@@ -103,7 +105,7 @@ const idsRutinasCompartidas = (rLinks || [])
 
 // ✅ TAREAS HOY: propias + grupo + compartidas (solo due_date)
 const [tOwn, tGrp, tInd] = await Promise.all([
-  filtroHoy(supabase.from('tasks').select('*').eq('usuario', uid), hoyStr),
+  supabase.from('tasks').select('*').eq('owner_id', uid), // <-- antes 'usuario'
   misGrupos.length
     ? filtroHoy(supabase.from('tasks').select('*').in('grupo_id', misGrupos), hoyStr)
     : Promise.resolve({ data: [] }),
@@ -128,7 +130,7 @@ const tareas = uniqById([
     const docIds = tareas.map(t => t.document_id).filter(Boolean);
     if (docIds.length) {
       const uniques = [...new Set(docIds)];
-      const { data: docs } = await supabase.from('documentos').select('id,caduca_el,usuario').in('id', uniques);
+      const { data: docs } = await supabase.from('documentos').select('id, caduca_el, owner_id').in('id', uniques);
       if (docs) docCaducidades = Object.fromEntries(docs.map(d => [d.id, d.caduca_el]));
     }
 
@@ -167,7 +169,7 @@ const tareas = uniqById([
 
   // 🔁 RUTINAS del día: propias + grupo + compartidas (filtradas por día/fechas)
   const [rOwn, rGrp, rInd] = await Promise.all([
-    supabase.from('routines').select('*').eq('is_active', true).eq('usuario', uid),
+supabase.from('routines').select('*').eq('is_active', true).eq('owner_id', uid),
     misGrupos.length
       ? supabase.from('routines').select('*').eq('is_active', true).in('grupo_id', misGrupos)
       : Promise.resolve({ data: [] }),

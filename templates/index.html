@@ -468,6 +468,19 @@ document.addEventListener("DOMContentLoaded", () => {
   </div>
 </div>
 
+<script>
+
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('modal-compartir');
+  if (!modal) return;
+
+  const cancelBtn = document.getElementById('share-cancel');
+  cancelBtn.addEventListener('click', () => {
+    modal.classList.add('oculto');
+  });
+});
+
+</script>
 
 
 

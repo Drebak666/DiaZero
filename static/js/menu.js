@@ -9,6 +9,11 @@ async function cargarRecetas() {
   // 1. Cargar recetas con sus ingredientes
 const usuario = getUsuarioActivo();
 
+// obtener uid actual
+const { data: { user } } = await supabase.auth.getUser();
+const uid = user?.id;
+if (!uid) return;
+
 const { data: recetas, error } = await supabase
   .from("recetas")
   .select(`
@@ -19,7 +24,8 @@ const { data: recetas, error } = await supabase
       ingrediente_id
     )
   `)
-  .eq("usuario", usuario); // ✅ Filtrar por el usuario activo
+  .eq("usuario", uid); // ✅ filtras por uid
+
 
 
   if (error) {
@@ -42,8 +48,7 @@ const { data: recetas, error } = await supabase
     .from("ingredientes_base")
 .select('*')
 .in("id", Array.from(todosIds))
-.eq("usuario", usuario);
-
+.eq("usuario", uid);
 
   if (errorIng) {
     console.error("Error al cargar ingredientes base:", errorIng);
@@ -78,8 +83,15 @@ async function guardarRecetaEnBD(tipo, recetaId, fecha, dia, container) {
     console.error("Fecha no definida");
     return;
   }
-const usuario = localStorage.getItem("usuario_actual") || "desconocido"; // ✅
-const { error } = await supabase.from("comidas_dia").insert([{ tipo, receta_id: recetaId, fecha, dia, usuario }]);
+const { data: { user } } = await supabase.auth.getUser();
+const uid = user?.id;
+if (!uid) return;
+
+const { data, error } = await supabase
+  .from("comidas_dia")
+  .select(` ... `)
+  .eq("owner_id", uid); // ✅ filtras por uid
+
 
   if (error) {
     console.error("Error al guardar la receta:", error);
@@ -95,21 +107,16 @@ async function borrarRecetaDeBD(recetaId, tipo, fecha) {
 
 async function cargarMenuGuardado() {
   console.log("Iniciando cargarMenuGuardado...");
-const usuario = localStorage.getItem("usuario_actual") || "desconocido";
-const { data, error } = await supabase
-  .from("comidas_dia")
-  .select(`
-    id, tipo, fecha, receta_id, dia,
-    recetas (
-      nombre,
-      ingredientes_receta (
-        cantidad,
-        unidad,
-        ingrediente_id
-      )
-    )
-  `)
-  .eq("usuario", usuario); // ✅ Aquí añades el filtro que falta
+const { data: { user } } = await supabase.auth.getUser();
+const uid = user?.id;
+if (!uid) {
+  console.error("No hay uid activo");
+  return;
+}
+
+const { error } = await supabase.from("comidas_dia")
+  .insert([{ tipo, receta_id: recetaId, fecha, dia, owner_id: uid }]); // ✅ guardas uid
+
 
 
   if (error) {

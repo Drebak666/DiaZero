@@ -7,69 +7,15 @@
   <link rel="stylesheet" href="/static/css/style.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
   <style>
-    body {
-      background-color: #f4f4f4;
-      font-family: sans-serif;
-      padding: 20px;
-    }
-
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-      margin-top: 35px;  
-      color: #333;
-    }
-
-    .grupo-fecha {
-      margin-bottom: 40px;
-    }
-
-    .titulo-fecha {
-      font-size: 1.4em;
-      font-weight: bold;
-      margin-bottom: 15px;
-      color: #222;
-      border-bottom: 2px solid #ccc;
-      padding-bottom: 5px;
-    }
-
-    .notas-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-    }
-
-    .nota-postit {
-      background-color: #fff58c;
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 3px 3px 10px rgba(0,0,0,0.1);
-      position: relative;
-      color: #222;
-    }
-
-  
-
-    .nota-texto {
-      font-size: 1.05em;
-      margin-bottom: 10px;
-    }
-
-    .nota-acciones {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      display: flex;
-      gap: 10px;
-    }
-
-    .icon-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      font-size: 1.1em;
-    }
-
+    body { background-color: #f4f4f4; font-family: sans-serif; padding: 20px; }
+    h1 { text-align: center; margin: 35px 0 20px; color: #333; }
+    .grupo-fecha { margin-bottom: 40px; }
+    .titulo-fecha { font-size: 1.4em; font-weight: bold; margin-bottom: 15px; color: #222; border-bottom: 2px solid #ccc; padding-bottom: 5px; }
+    .notas-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+    .nota-postit { background-color: #fff58c; padding: 15px; border-radius: 8px; box-shadow: 3px 3px 10px rgba(0,0,0,0.1); position: relative; color: #222; }
+    .nota-texto { font-size: 1.05em; margin-bottom: 10px; }
+    .nota-acciones { position: absolute; bottom: 10px; right: 10px; display: flex; gap: 10px; }
+    .icon-btn { background: none; border: none; cursor: pointer; font-size: 1.1em; }
     .icon-btn.edit { color: #333; }
     .icon-btn.delete { color: #c00; }
   </style>
@@ -77,36 +23,35 @@
 <body>
   <div class="page-container">
     <h1>Mis Notas</h1>
+    <div id="contenedor-notas"></div>
+  </div>
 
-  <div id="contenedor-notas">
-    <!-- Aquí se insertan las secciones por fecha -->
-  </div>
-   
-  </div>
   <script type="module">
     import { supabase } from '/static/js/supabaseClient.js';
 
     const contenedor = document.getElementById('contenedor-notas');
 
+    async function getUidActual() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        return user?.id || null;
+      } catch { return null; }
+    }
+
     function formatearFechaLarga(fechaStr) {
       const fecha = new Date(fechaStr);
-      return fecha.toLocaleDateString('es-ES', {
-        day: 'numeric',
-        month: 'long'
-      });
+      return fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
     }
 
     async function cargarNotasAgrupadas() {
-      
-      
-      const usuarioActual = localStorage.getItem('usuario_actual');
+      const uid = await getUidActual();
+      if (!uid) return;
 
-const { data, error } = await supabase
-  .from('notas')
-  .select('*')
-  .eq('usuario', usuarioActual)
-  .order('fecha_creacion', { ascending: false });
-
+      const { data, error } = await supabase
+        .from('notas')
+        .select('*')
+        .eq('usuario_id', uid)
+        .order('fecha_creacion', { ascending: false });
 
       if (error) {
         console.error("Error al obtener las notas:", error);
@@ -114,15 +59,13 @@ const { data, error } = await supabase
       }
 
       const agrupadas = {};
-
-      data.forEach(nota => {
+      (data || []).forEach(nota => {
         const fecha = formatearFechaLarga(nota.fecha_creacion);
         if (!agrupadas[fecha]) agrupadas[fecha] = [];
         agrupadas[fecha].push(nota);
       });
 
       contenedor.innerHTML = '';
-
       for (const fecha in agrupadas) {
         const grupo = document.createElement('div');
         grupo.classList.add('grupo-fecha');
@@ -134,36 +77,25 @@ const { data, error } = await supabase
         const grid = document.createElement('div');
         grid.className = 'notas-grid';
 
-       // Función para generar colores pastel aleatorios
-function randomPastel() {
-  const hue = Math.floor(Math.random() * 360);
-  return `hsl(${hue}, 80%, 85%)`;
-}
+        function randomPastel() {
+          const hue = Math.floor(Math.random() * 360);
+          return `hsl(${hue}, 80%, 85%)`;
+        }
 
-agrupadas[fecha].forEach(nota => {
-  const div = document.createElement('div');
-  div.className = 'nota-postit';
-  div.setAttribute('data-id', nota.id);
-
-  // 👇 asignar color pastel random
-  div.style.backgroundColor = randomPastel();
-
-  div.innerHTML = `
-    <div class="nota-texto">${nota.descripcion}</div>
-    <div class="nota-acciones">
-      <button class="icon-btn edit" onclick="editarNota('${nota.id}')">
-        <i class="fas fa-edit"></i>
-      </button>
-    
-      <button class="icon-btn delete" onclick="borrarNota('${nota.id}')">
-        <i class="fas fa-trash-alt"></i>
-      </button>
-    </div>
-  `;
-
-  grid.appendChild(div);
-});
-
+        agrupadas[fecha].forEach(nota => {
+          const div = document.createElement('div');
+          div.className = 'nota-postit';
+          div.dataset.id = nota.id;
+          div.style.backgroundColor = randomPastel();
+          div.innerHTML = `
+            <div class="nota-texto">${nota.descripcion}</div>
+            <div class="nota-acciones">
+              <button class="icon-btn edit" onclick="editarNota('${nota.id}')"><i class="fas fa-edit"></i></button>
+              <button class="icon-btn delete" onclick="borrarNota('${nota.id}')"><i class="fas fa-trash-alt"></i></button>
+            </div>
+          `;
+          grid.appendChild(div);
+        });
 
         grupo.appendChild(titulo);
         grupo.appendChild(grid);
@@ -172,63 +104,41 @@ agrupadas[fecha].forEach(nota => {
     }
 
     window.editarNota = function(id) {
-  const notaDiv = document.querySelector(`.nota-postit[data-id='${id}']`);
-  const textoDiv = notaDiv.querySelector('.nota-texto');
-  const accionesDiv = notaDiv.querySelector('.nota-acciones');
+      const notaDiv = document.querySelector(`.nota-postit[data-id='${id}']`);
+      const textoDiv = notaDiv.querySelector('.nota-texto');
+      const accionesDiv = notaDiv.querySelector('.nota-acciones');
+      const contenidoOriginal = textoDiv.textContent;
 
-  const contenidoOriginal = textoDiv.textContent;
+      textoDiv.innerHTML = `<textarea class="edit-area">${contenidoOriginal}</textarea>`;
+      accionesDiv.innerHTML = `
+        <button class="icon-btn save" onclick="guardarNota('${id}')"><i class="fas fa-check"></i></button>
+        <button class="icon-btn cancel" onclick="cancelarEdicion()"><i class="fas fa-times"></i></button>
+      `;
+    };
 
-  textoDiv.innerHTML = `
-    <textarea class="edit-area">${contenidoOriginal}</textarea>
-  `;
+    window.cancelarEdicion = function() { cargarNotasAgrupadas(); };
 
-  accionesDiv.innerHTML = `
-    <button class="icon-btn save" onclick="guardarNota('${id}')">
-      <i class="fas fa-check"></i>
-    </button>
-    <button class="icon-btn cancel" onclick="cancelarEdicion('${id}', '${contenidoOriginal}')">
-      <i class="fas fa-times"></i>
-    </button>
-  `;
-};
-
-window.cancelarEdicion = function(id, texto) {
-  cargarNotasAgrupadas(); // Vuelve a cargar todo limpio
-};
-
-window.guardarNota = async function(id) {
+   window.guardarNota = async function(id) {
   const notaDiv = document.querySelector(`.nota-postit[data-id='${id}']`);
   const nuevaDescripcion = notaDiv.querySelector('.edit-area').value;
-
   const { error } = await supabase
     .from('notas')
     .update({ descripcion: nuevaDescripcion })
     .eq('id', id);
 
-  if (error) {
-    alert("Error al guardar la nota");
-    console.error(error);
-  }
-
-  cargarNotasAgrupadas(); // Refresca después de guardar
+  if (error) console.error(error);
+  cargarNotasAgrupadas();
 };
 
 
     window.borrarNota = async function(id) {
       if (!confirm("¿Seguro que quieres borrar esta nota?")) return;
       const { error } = await supabase.from('notas').delete().eq('id', id);
-      if (error) {
-        alert("Error al borrar");
-        console.error(error);
-      } else {
-        cargarNotasAgrupadas();
-      }
-    }
+      if (error) console.error(error);
+      else cargarNotasAgrupadas();
+    };
 
     cargarNotasAgrupadas();
-
-
   </script>
- 
 </body>
 </html>
