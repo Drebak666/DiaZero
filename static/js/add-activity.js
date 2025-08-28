@@ -645,7 +645,8 @@ if (!user) { alert("No hay usuario autenticado."); return; }
 const uid = user.id;
 
 // 👇 Base del objeto a insertar en cualquier tipo (siempre UID)
-let dataToSave = { description: descripcion, usuario: uid };
+// 👇 Base del objeto (usar owner_id para citas)
+let dataToSave = { description: descripcion, owner_id: uid };
 
 
 

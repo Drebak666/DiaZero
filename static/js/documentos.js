@@ -44,15 +44,20 @@ async function cargarDocumentos() {
   lista.innerHTML = "";
   selectorTipo.innerHTML = '<option value="todos">Todos</option>';
 
-  const usuario = await getUsuarioActivo();
-  if (!usuario) return;
+const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id || null;
+  const legacy = await getUsuarioActivo(); // por si hay docs viejos con nombre
+  if (!uid && !legacy) return;
 
-  const { data, error } = await supabase
-    .from("documentos")
-    .select("*")
-    .eq("usuario", usuario)
-    .order("caduca_el", { ascending: true, nullsFirst: false }) // por caducidad
-    .order("created_at", { ascending: true });                   // desempate
+let query = supabase.from("documentos").select("*");
+query = uid
+  ? query.in("usuario", [uid, legacy].filter(Boolean))
+  : query.eq("usuario", legacy);
+
+const { data, error } = await query
+  .order("caduca_el", { ascending: true, nullsFirst: false })
+  .order("created_at", { ascending: true });
+
 
   if (error) { console.error("Error cargando documentos:", error); return; }
 
@@ -177,13 +182,14 @@ if (formulario) {
     const tipo = tipoInput.value.trim();
     const caducaEl = document.getElementById("caduca_el").value || null;
     const archivo = document.getElementById("archivo").files[0];
-    const usuario = await getUsuarioActivo();
+    const { data: { user } } = await supabase.auth.getUser();
+ const usuario = user?.id || null;
     const idEditar = formulario.getAttribute("data-id-editar");
 
     if (!nombre || !tipo || !usuario) return;
 
     if (idEditar) {
-      const updateData = { nombre, tipo, caduca_el: caducaEl };
+      const updateData = { nombre, tipo, caduca_el: caducaEl, usuario };
       if (archivo) {
         const archivo_url = await subirArchivo(archivo);
         if (!archivo_url) return;
@@ -233,14 +239,15 @@ async function borrarDocumento(id) {
 if (selectorTipo) {
   selectorTipo.addEventListener("change", async () => {
     const tipoSel = selectorTipo.value;
-    const usuario = await getUsuarioActivo();
-
-    let query = supabase
-      .from("documentos")
-      .select("*")
-      .eq("usuario", usuario)
-      .order("caduca_el", { ascending: true })
-      .order("created_at", { ascending: true });
+const { data: { user } } = await supabase.auth.getUser();
+   const uid = user?.id || null;
+   const legacy = await getUsuarioActivo();
+   let query = supabase.from("documentos").select("*");
+   query = uid
+     ? query.in("usuario", [uid, legacy].filter(Boolean))
+     : query.eq("usuario", legacy)
+     .order("caduca_el", { ascending: true })
+     .order("created_at", { ascending: true });
 
     if (tipoSel !== "todos") query = query.eq("tipo", tipoSel);
 

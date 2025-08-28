@@ -210,12 +210,12 @@ async function fetchUltimasCitas() {
 
   // Citas de 3 vías
   const [propiasRes, grupoRes, compRes] = await Promise.all([
-    supabase.from('appointments')
-.select('id, description, date, start_time, end_time, completed, usuario, grupo_id, requirements')
-.eq('usuario', uid),
+     supabase.from('appointments')
+.select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
+.or(`owner_id.eq.${uid},usuario.eq.${uid}`),
     misGrupos.length
       ? supabase.from('appointments')
-.select('id, description, date, start_time, end_time, completed, usuario, grupo_id, requirements')
+.select('id, description, date, start_time, end_time, completed, owner_id, usuario, grupo_id, requirements')
   .in('grupo_id', misGrupos)
       : Promise.resolve({ data: [] }),
     idsCompartidas.length
@@ -391,7 +391,8 @@ const hora = c.start_time && c.end_time
 const rest = tiempoRestante(c.date, c.start_time, c.end_time);
 
 // ← Mueve readonly AQUÍ (antes de reqHtml)
-const readonly = !!(CURRENT_UID && c.usuario !== CURRENT_UID);
+const owner = c.owner_id || c.usuario;
+ const readonly = !!(CURRENT_UID && owner !== CURRENT_UID);
 
 // requisitos
 const reqs = Array.isArray(c.requirements) ? c.requirements : [];
@@ -548,7 +549,6 @@ cont.querySelectorAll('.btn-share').forEach(btn => {
       const id = btn.dataset.id;
       const cita = cache.find(x => x.id === id);
       if (!cita) return;
-      if (!confirm('¿Seguro que quieres borrar esta cita?')) return;
       const { error } = await supabase.from('appointments').delete().eq('id', id);
       if (error) { alert('No se pudo borrar'); console.error(error); return; }
       await registrarAccion('borrar', cita);   // opcional: comenta si no te interesa el log

@@ -48,6 +48,8 @@
       <h3>Editar Tarea</h3>
       <form id="editar-formulario-tarea" class="form-editar-cita">
         <input id="editar-id-tarea" type="hidden" />
+          <input id="editar-tipo" type="hidden" />
+
         <div class="form-group">
           <label for="editar-descripcion-tarea">Descripción:</label>
           <input id="editar-descripcion-tarea" type="text" placeholder="Descripción" />
@@ -57,14 +59,7 @@
             <label for="editar-fecha-tarea">Fecha:</label>
             <input id="editar-fecha-tarea" type="date" />
           </div>
-          <div class="form-group">
-            <label for="editar-prioridad-tarea">Prioridad:</label>
-            <select id="editar-prioridad-tarea">
-              <option value="Baja">Baja</option>
-              <option value="Media">Media</option>
-              <option value="Alta">Alta</option>
-            </select>
-          </div>
+         
         </div>
         <div class="form-grid-2cols">
           <div class="form-group">
@@ -472,6 +467,8 @@ document.addEventListener("DOMContentLoaded", () => {
     <div id="qmp-status" class="qmp-status"></div>
   </div>
 </div>
+
+
 
 
 </body>

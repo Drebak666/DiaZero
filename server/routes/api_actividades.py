@@ -69,7 +69,7 @@ def api_listar_actividades():
                 hf    = _get(row, "end_time", "hora_fin")
                 # completed / is_completed / estado
                 raw_estado = _get(row, "is_completed", "completed", "estado")
-                user = _get(row, "usuario", "user", "username", "owner")
+                user = _get(row, "usuario", "user", "username", "owner", "owner_id")
 
                 item = {
                     "id": row["id"],

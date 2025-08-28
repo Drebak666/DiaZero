@@ -1,310 +1,322 @@
 # server/scheduler.py
+from __future__ import annotations
+
 import os
-import json
-import logging
-import requests
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import requests
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.triggers.date import DateTrigger
-from pytz import utc  # APScheduler usa pytz para timezone
+
+# ====== CONFIG ======
+TICK_SECONDS = 10  # frecuencia del ciclo (segundos)
+LOCAL_TZ = ZoneInfo(os.getenv("LOCAL_TZ", "Europe/Madrid"))
+
+# ====== HELPERS TIEMPO ======
+def _now_utc() -> datetime:
+    return datetime.now(ZoneInfo("UTC"))
+
+def _parse_time(s: str | None) -> tuple[int, int, int] | None:
+    """
+    Acepta "HH:MM", "HH:MM:SS" y "HH:MM:SS.ssssss"
+    Devuelve (hh, mm, ss)
+    """
+    if not s:
+        return None
+    try:
+        p = s.split(":")
+        hh = int(p[0])
+        mm = int(p[1])
+        ss = 0
+        if len(p) >= 3:
+            ss = int(float(p[2]))  # elimina microsegundos si llegan
+        return hh, mm, ss
+    except Exception:
+        return None
+
+def _local_to_utc(dt_local: datetime) -> datetime:
+    if dt_local.tzinfo is None:
+        dt_local = dt_local.replace(tzinfo=LOCAL_TZ)
+    return dt_local.astimezone(ZoneInfo("UTC"))
+
+def _utc_to_local(dt_utc: datetime) -> datetime:
+    if dt_utc.tzinfo is None:
+        dt_utc = dt_utc.replace(tzinfo=ZoneInfo("UTC"))
+    return dt_utc.astimezone(LOCAL_TZ)
+
 
 def create_scheduler(app):
     """
-    Crea y configura el BackgroundScheduler con los mismos jobs que antes.
-    Devuelve el scheduler (ya arrancado si ENABLE_SCHEDULER=true).
+    Arranca un BackgroundScheduler y programa el chequeo periódico.
     """
+    SUPABASE_URL = (app.config.get("SUPABASE_URL") or os.getenv("SUPABASE_URL", "")).rstrip("/")
+    SB_ANON = app.config.get("SUPABASE_API_KEY") or os.getenv("SUPABASE_API_KEY", "")
+    SB_SR   = app.config.get("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
-    # === Config leída desde app.config y ENV ===
-    SUPABASE_URL = (app.config.get("SUPABASE_URL") or "").rstrip("/")
-    SUPABASE_API_KEY = app.config.get("SUPABASE_API_KEY")
-    SUPABASE_SVC_KEY = app.config.get("SUPABASE_SERVICE_KEY") or SUPABASE_API_KEY
-
-    VAPID_PUBLIC  = app.config.get("VAPID_PUBLIC")
-    VAPID_PRIVATE = app.config.get("VAPID_PRIVATE")
-    VAPID_CLAIMS  = app.config.get("VAPID_CLAIMS") or {}
-
-    LOCAL_TZ  = ZoneInfo(os.getenv("LOCAL_TZ", "Europe/Madrid"))
-    TICK_SECONDS = int(os.getenv("SCHED_TICK_SECONDS", "10"))
-
-    # Tablas/columnas (igual que antes)
-    APPT_TABLE, APPT_USER_COL, APPT_DATE_COL, APPT_START_COL = "appointments", "usuario", "date", "start_time"
-    TASK_TABLE, TASK_USER_COL, TASK_DONE_COL, TASK_DATE_COL, TASK_START_COL = "tasks", "usuario", "is_completed", "due_date", "start_time"
+    # ====== Tablas / columnas ======
+    # Citas
+    APPT_TABLE, APPT_USER_COL, APPT_DATE_COL, APPT_START_COL = (
+        "appointments", "owner_id", "date", "start_time"
+    )
+    # Tareas (dueño = 'usuario')
+    TASK_TABLE, TASK_USER_COL, TASK_DONE_COL, TASK_DATE_COL, TASK_START_COL = (
+        "tasks", "usuario", "is_completed", "due_date", "start_time"
+    )
+    # Rutinas (dueño = 'usuario')
     ROUT_TABLE, ROUT_USER_COL, ROUT_START_COL, ROUT_DOW_COL, ROUT_ACTIVE_COL, ROUT_END_DATE_COL = (
         "routines", "usuario", "start_time", "days_of_week", "is_active", "end_date"
     )
-    PREFS_TABLE, SENT_TABLE = "notification_prefs", "notifications_sent"
-    SPANISH_DOW = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"]
 
-    # === Helpers internos (copiados del app.py) ===
-    def _today_name_es() -> str:
-        return SPANISH_DOW[datetime.now(LOCAL_TZ).weekday()]
+    PREFS_TABLE = "notification_prefs"   # user_id uuid, tasks_lead_min int4, citas_leads_min int4[]
+    SENT_TABLE  = "notifications_sent"   # user_id uuid, entity_type text, entity_id uuid/text, kind text, sent_at timestamptz
 
-    def _supa_headers(admin: bool = False) -> dict:
-        key = SUPABASE_SVC_KEY if admin else SUPABASE_API_KEY
-        return {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    def _supa_headers(service: bool = False):
+        key = SB_SR if service else SB_ANON
+        return {
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Prefer": "return=representation",
+        }
 
-    def _parse_hhmm(s: str):
+    # ====== DEDUP ======
+    def _already_sent(user_id: str, entity_type: str, entity_id: str | None) -> bool:
         try:
-            hh, mm = map(int, s.strip()[:5].split(":"))
-            return hh, mm
-        except Exception:
-            return None
-
-    def _local_to_utc(dt_local: datetime) -> datetime:
-        if dt_local.tzinfo is None:
-            dt_local = dt_local.replace(tzinfo=LOCAL_TZ)
-        return dt_local.astimezone(timezone.utc)
-
-    def _iso_utc(dt: datetime) -> str:
-        return dt.replace(microsecond=0).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-    def _now_utc() -> datetime:
-        return datetime.now(timezone.utc)
-
-    def _distinct_usernames_with_subs() -> list[str]:
-        url = f"{SUPABASE_URL}/rest/v1/push_subscriptions"
-        r = requests.get(url, headers=_supa_headers(), params={"select": "username"}, timeout=10)
-        r.raise_for_status()
-        rows = r.json() or []
-        return sorted({row.get("username") for row in rows if row.get("username")})
-
-    def _get_prefs(username: str) -> dict:
-        url = f"{SUPABASE_URL}/rest/v1/{PREFS_TABLE}"
-        params = {"select": "username,tasks_lead_min,citas_leads_min", "username": f"eq.{username}", "limit": "1"}
-        try:
-            r = requests.get(url, headers=_supa_headers(), params=params, timeout=10)
-            row = (r.json() or [{}])[0] if r.ok else {}
-        except Exception:
-            row = {}
-        tasks_min_default = -15
-        apt_default = [-43200, -21600, -1440, -60]
-        try:
-            tasks_min = -abs(int(row.get("tasks_lead_min", tasks_min_default)))
-        except Exception:
-            tasks_min = tasks_min_default
-        try:
-            apt = [(-abs(int(x))) for x in (row.get("citas_leads_min") or apt_default)]
-            if not apt:
-                apt = apt_default
-        except Exception:
-            apt = apt_default
-        return {"tasks_lead_min": tasks_min, "citas_leads_min": apt}
-
-    def _already_sent(username, kind, item_id, offset_min) -> bool:
-        url = f"{SUPABASE_URL}/rest/v1/{SENT_TABLE}"
-        and_param = f"(username.eq.{username},kind.eq.{kind},offset_min.eq.{int(offset_min)})"
-        if item_id:
-            and_param = f"(username.eq.{username},kind.eq.{kind},item_id.eq.{item_id},offset_min.eq.{int(offset_min)})"
-        try:
-            r = requests.get(url, headers=_supa_headers(True),
-                             params={"select": "id", "and": and_param, "limit": 1}, timeout=10)
-            return bool(r.ok and r.json())
-        except Exception:
-            return False
-
-    def _mark_sent(username, kind, item_id, offset_min):
-        url = f"{SUPABASE_URL}/rest/v1/{SENT_TABLE}"
-        payload = {"username": username, "kind": kind, "item_id": item_id, "offset_min": int(offset_min), "fired_at": _iso_utc(_now_utc())}
-        try:
-            requests.post(url, headers=_supa_headers(True), json=payload, timeout=10)
+            params = [
+                ("select", "id"),
+                ("user_id", f"eq.{user_id}"),
+                ("entity_type", f"eq.{entity_type}"),
+                ("limit", "1"),
+            ]
+            if entity_id:
+                params.append(("entity_id", f"eq.{entity_id}"))
+            url = f"{SUPABASE_URL}/rest/v1/{SENT_TABLE}"
+            r = requests.get(url, headers=_supa_headers(True), params=params, timeout=10)
+            if r.ok:
+                return bool(r.json())
         except Exception:
             pass
+        return False
 
-    def _send_push(username: str, title: str, body: str, url: str = "/"):
+    def _mark_sent(user_id: str, entity_type: str, entity_id: str | None, kind: str):
         try:
-            base_env = (os.getenv("PUSH_BASE_URL") or "").strip().rstrip("/")
-            base = base_env or "http://127.0.0.1:8000"
-            endpoint = f"{base}/api/push/send"
-            payload = {"username": username, "title": title, "body": body, "url": url}
-            r = requests.post(endpoint, json=payload, timeout=10)
-            if not r.ok:
-                app.logger.warning("[push] POST %s -> %s %s", endpoint, r.status_code, r.text[:200])
-                return False
-            app.logger.info("[push] ✅ enviada a %s (%s)", username, endpoint)
-            return True
+            url = f"{SUPABASE_URL}/rest/v1/{SENT_TABLE}"
+            payload = {"user_id": user_id, "entity_type": entity_type, "kind": kind}
+            if entity_id:
+                payload["entity_id"] = str(entity_id)
+            requests.post(url, headers=_supa_headers(True), json=payload, timeout=10)
         except Exception as e:
-            app.logger.exception("[push] 💥 error enviando push: %s", e)
-            return False
+            app.logger.warning("[sched] mark_sent error: %s", e)
 
-    # === Jobs (idénticos a los que tenías) ===
-    def _check_tasks(username: str, tasks_offset_min: int):
+    # ====== PUSH ======
+    def _send_push(user_id: str, title: str, body: str, url_path: str = "/"):
+        base = os.getenv("PUSH_BASE_URL", "http://127.0.0.1:5000").rstrip("/")
+        try:
+            r = requests.post(
+                f"{base}/api/push/send",
+                headers={"Content-Type": "application/json"},
+                json={"user_id": user_id, "title": title, "body": body, "url": url_path},
+                timeout=10,
+            )
+            app.logger.info("[push] send -> %s %s", r.status_code, r.text[:120])
+        except Exception as e:
+            app.logger.warning("[push] send exception: %s", e)
+
+    # ====== CHEQUEOS ======
+    def _check_tasks(user_id: str, lead_min: int | None):
+        """
+        Dispara cuando (due_date + start_time) + lead_min cae en [now - TICK, now].
+        Ignora tareas completadas.
+        """
+        if lead_min is None:
+            return
+
         base = f"{SUPABASE_URL}/rest/v1/{TASK_TABLE}"
-        now_utc   = _now_utc()
-        win_start = now_utc - timedelta(seconds=TICK_SECONDS)
-        win_end   = now_utc
-        today_local = datetime.now(LOCAL_TZ).date().isoformat()
-        select_cols = f"id,description,{TASK_DATE_COL},{TASK_START_COL},{TASK_DONE_COL},{TASK_USER_COL}"
+        now_utc = _now_utc()
+        win_start, win_end = now_utc - timedelta(seconds=TICK_SECONDS), now_utc
+
+        now_local = _utc_to_local(now_utc)
+        day_min = (now_local - timedelta(days=1)).date().isoformat()
+        day_max = (now_local + timedelta(days=1)).date().isoformat()
+
         params = [
-            ("select", select_cols),
-            (TASK_USER_COL, f"eq.{username}"),
-            (TASK_DONE_COL, "eq.false"),
-            (TASK_DATE_COL, f"eq.{today_local}"),
-            ("order", f"{TASK_DATE_COL}.asc,{TASK_START_COL}.asc"),
-            ("limit", "100"),
+            ("select", f"id,{TASK_USER_COL},{TASK_DATE_COL},{TASK_START_COL},{TASK_DONE_COL},description"),
+            (TASK_USER_COL, f"eq.{user_id}"),
+            (TASK_DONE_COL, "is.false"),
+            (TASK_DATE_COL, f"gte.{day_min}"),
+            (TASK_DATE_COL, f"lte.{day_max}"),
+            ("limit", "200"),
         ]
         try:
             r = requests.get(base, headers=_supa_headers(True), params=params, timeout=10)
-            app.logger.info("[sched] %s tasks off=%s status=%s", username, tasks_offset_min, r.status_code)
+            app.logger.info("[sched] uid=%s tasks off=%s status=%s", user_id, lead_min, r.status_code)
             if not r.ok:
-                app.logger.warning("[sched] tasks body=%s", r.text[:200]); return
+                app.logger.warning("[sched] tasks body=%s", r.text[:200])
+                return
+
             for row in (r.json() or []):
                 d = row.get(TASK_DATE_COL)
-                hhmm = (row.get(TASK_START_COL) or "").strip()
-                if not d or not hhmm: continue
-                try:
-                    yy, mm, dd = map(int, d.split("-"))
-                    hh, mi = map(int, hhmm[:5].split(":"))
-                except Exception:
+                t = row.get(TASK_START_COL)
+                tm = _parse_time(t) if (d and t) else None
+                if not tm:
                     continue
-                start_utc = _local_to_utc(datetime(yy, mm, dd, hh, mi))
-                target = start_utc + timedelta(minutes=tasks_offset_min)
+                yy, mm, dd = map(int, d.split("-"))
+                hh, mi, ss = tm
+                event_utc = _local_to_utc(datetime(yy, mm, dd, hh, mi, ss))
+                target = event_utc + timedelta(minutes=lead_min)
                 if win_start <= target <= win_end:
-                    desc = row.get("description") or "Tarea"
-                    _send_push(username, "Tarea", f"{desc} • empieza ya", url="/app")
-                    app.logger.info("[sched] TASK HIT id=%s desc=%s at=%s", row.get("id"), desc, target)
+                    item_id = row.get("id")
+                    if not _already_sent(user_id, "task", item_id):
+                        title = row.get("description") or "Tarea"
+                        _send_push(user_id, f"✅ {title}", "Recordatorio de tarea", "/")
+                        _mark_sent(user_id, "task", item_id, "task")
         except Exception as e:
             app.logger.warning("[sched] tasks exception: %s", e)
 
-    def _check_routines(username: str, offset_min: int):
+    def _check_routines(user_id: str, offsets: list[int]):
+        """
+        Rutinas activas: dispara cuando (hoy a start_time) + offset cae en [now - TICK, now].
+        """
+        if not offsets:
+            return
+
         base = f"{SUPABASE_URL}/rest/v1/{ROUT_TABLE}"
-        now_utc   = _now_utc()
-        win_start = now_utc - timedelta(seconds=TICK_SECONDS)
-        win_end   = now_utc
-        today_local = datetime.now(LOCAL_TZ).date()
-        today_name  = _today_name_es()
-        select_cols = f"id,description,{ROUT_START_COL},{ROUT_USER_COL},{ROUT_DOW_COL},{ROUT_ACTIVE_COL},{ROUT_END_DATE_COL}"
+        now_utc = _now_utc()
+        win_start, win_end = now_utc - timedelta(seconds=TICK_SECONDS), now_utc
+
+        now_local = _utc_to_local(now_utc)
+        today = now_local.date().isoformat()
+
         params = [
-            ("select", select_cols),
-            (ROUT_USER_COL, f"eq.{username}"),
-            (ROUT_ACTIVE_COL, "eq.true"),
-            (ROUT_DOW_COL, "cs." + json.dumps([today_name])),
-            ("limit", "100"),
+            ("select", f"id,{ROUT_USER_COL},{ROUT_START_COL},{ROUT_ACTIVE_COL},description,{ROUT_END_DATE_COL}"),
+            (ROUT_USER_COL, f"eq.{user_id}"),
+            (ROUT_ACTIVE_COL, "is.true"),
+            ("limit", "200"),
         ]
         try:
             r = requests.get(base, headers=_supa_headers(True), params=params, timeout=10)
-            app.logger.info("[sched] %s routines off=%s status=%s", username, offset_min, r.status_code)
+            app.logger.info("[sched] uid=%s routines off=%s status=%s", user_id, offsets, r.status_code)
             if not r.ok:
-                app.logger.warning("[sched] routines body=%s", r.text[:200]); return
+                app.logger.warning("[sched] routines body=%s", r.text[:200])
+                return
+
             for row in (r.json() or []):
-                st = (row.get(ROUT_START_COL) or "").strip()
-                if len(st) < 4: continue
-                hh, mi = map(int, st[:5].split(":"))
-                start_utc = _local_to_utc(datetime(today_local.year, today_local.month, today_local.day, hh, mi))
-                target = start_utc + timedelta(minutes=offset_min)
-                if win_start <= target <= win_end:
-                    desc = row.get("description") or "Rutina"
-                    if not _already_sent(username, "routine", row.get("id"), offset_min):
-                        _send_push(username, "Rutina", f"{desc} • empieza ya", url="/app")
-                        _mark_sent(username, "routine", row.get("id"), offset_min)
+                end_d = row.get(ROUT_END_DATE_COL)
+                if end_d:
+                    try:
+                        if datetime.fromisoformat(end_d).date() < datetime.now(LOCAL_TZ).date():
+                            continue
+                    except Exception:
+                        pass
+
+                t = row.get(ROUT_START_COL)
+                tm = _parse_time(t)
+                if not tm:
+                    continue
+                yy, mm, dd = map(int, today.split("-"))
+                hh, mi, ss = tm
+                event_utc = _local_to_utc(datetime(yy, mm, dd, hh, mi, ss))
+
+                for off in offsets:
+                    target = event_utc + timedelta(minutes=off)
+                    if win_start <= target <= win_end:
+                        item_id = row.get("id")
+                        if not _already_sent(user_id, "routine", item_id):
+                            title = row.get("description") or "Rutina"
+                            _send_push(user_id, f"🔁 {title}", "Recordatorio de rutina", "/")
+                            _mark_sent(user_id, "routine", item_id, "routine")
+                        break
         except Exception as e:
             app.logger.warning("[sched] routines exception: %s", e)
 
-    def _check_appointments(username: str, offsets: list[int]):
-        if not offsets: return
-        base    = f"{SUPABASE_URL}/rest/v1/{APPT_TABLE}"
+    def _check_appointments(user_id: str, offsets: list[int]):
+        """
+        Citas: dispara cuando (date + start_time) + offset cae en [now - TICK, now].
+        """
+        if not offsets:
+            return
+
+        base = f"{SUPABASE_URL}/rest/v1/{APPT_TABLE}"
         now_utc = _now_utc()
-        win_end = now_utc + timedelta(seconds=TICK_SECONDS)
-        now_local = datetime.now(LOCAL_TZ)
+        win_start, win_end = now_utc - timedelta(seconds=TICK_SECONDS), now_utc
+
+        now_local = _utc_to_local(now_utc)
         day_min = (now_local - timedelta(days=1)).date().isoformat()
         day_max = (now_local + timedelta(days=1)).date().isoformat()
-        for off in offsets:
-            start_from_utc = now_utc - timedelta(minutes=off)
-            start_to_utc   = win_end  - timedelta(minutes=off)
-            params = [
-                ("select", f"id,{APPT_USER_COL},{APPT_DATE_COL},{APPT_START_COL},description"),
-                (APPT_USER_COL, f"eq.{username}"),
-                (APPT_DATE_COL, f"gte.{day_min}"),
-                (APPT_DATE_COL, f"lte.{day_max}"),
-            ]
-            try:
-                r = requests.get(base, headers=_supa_headers(True), params=params, timeout=10)
-                app.logger.info("[sched] %s appointments off=%s %s..%s status=%s", username, off, day_min, day_max, r.status_code)
-                if not r.ok:
-                    app.logger.warning("[sched] appts body=%s", r.text[:200]); continue
-                for row in (r.json() or []):
-                    d = row.get(APPT_DATE_COL); t = row.get(APPT_START_COL)
-                    hhmm = _parse_hhmm(t) if (d and t) else None
-                    if not hhmm: continue
-                    yy, mm, dd = map(int, d.split("-")); hh, mi = hhmm
-                    event_utc = _local_to_utc(datetime(yy, mm, dd, hh, mi))
-                    if start_from_utc <= event_utc < start_to_utc:
+
+        params = [
+            ("select", f"id,{APPT_USER_COL},{APPT_DATE_COL},{APPT_START_COL},description"),
+            (APPT_USER_COL, f"eq.{user_id}"),
+            (APPT_DATE_COL, f"gte.{day_min}"),
+            (APPT_DATE_COL, f"lte.{day_max}"),
+            ("limit", "200"),
+        ]
+        try:
+            r = requests.get(base, headers=_supa_headers(True), params=params, timeout=10)
+            app.logger.info("[sched] uid=%s appointments %s..%s status=%s", user_id, day_min, day_max, r.status_code)
+            if not r.ok:
+                app.logger.warning("[sched] appts body=%s", r.text[:200])
+                return
+
+            for row in (r.json() or []):
+                d = row.get(APPT_DATE_COL)
+                t = row.get(APPT_START_COL)
+                tm = _parse_time(t) if (d and t) else None
+                if not tm:
+                    continue
+                yy, mm, dd = map(int, d.split("-"))
+                hh, mi, ss = tm
+                event_utc = _local_to_utc(datetime(yy, mm, dd, hh, mi, ss))
+
+                for off in offsets:
+                    target = event_utc + timedelta(minutes=off)
+                    if win_start <= target <= win_end:
                         item_id = row.get("id")
-                        if not _already_sent(username, "appointment", item_id, off):
+                        if not _already_sent(user_id, "appointment", item_id):
                             title = row.get("description") or "Cita"
-                            _send_push(username, f"⏰ {title}", "Recordatorio de cita", "/")
-                            _mark_sent(username, "appointment", item_id, off)
-            except Exception as e:
-                app.logger.warning("[sched] appts exception: %s", e)
+                            _send_push(user_id, f"⏰ {title}", "Recordatorio de cita", "/")
+                            _mark_sent(user_id, "appointment", item_id, "appointment")
+                        break
+        except Exception as e:
+            app.logger.warning("[sched] appts exception: %s", e)
 
-    # === Job principal y scheduler ===
+    # ====== JOB PRINCIPAL ======
     def check_and_send():
-        with app.app_context():
-            try:
-                users = _distinct_usernames_with_subs()
-                for u in users:
-                    prefs = _get_prefs(u)
-                    _check_appointments(u, prefs["citas_leads_min"])
-                    _check_tasks(u, prefs["tasks_lead_min"])
-                    _check_routines(u, prefs["tasks_lead_min"])
-            except Exception as e:
-                app.logger.exception("scheduler error: %s", e)
+        try:
+            url = f"{SUPABASE_URL}/rest/v1/{PREFS_TABLE}"
+            r = requests.get(
+                url,
+                headers=_supa_headers(True),
+                params={"select": "user_id,tasks_lead_min,citas_leads_min", "limit": "200"},
+                timeout=10,
+            )
+            if not r.ok:
+                app.logger.warning("[sched] prefs body=%s", r.text[:200])
+                return
 
-    scheduler = BackgroundScheduler(timezone=utc, daemon=True)
+            for pref in (r.json() or []):
+                uid = pref.get("user_id")
+                if not uid:
+                    continue
+                tasks_lead = pref.get("tasks_lead_min")            # int o None
+                citas_offsets = pref.get("citas_leads_min") or []  # lista de enteros
 
-    scheduler.add_job(
-        check_and_send, "interval", seconds=TICK_SECONDS,
-        id="push-tick", misfire_grace_time=300, replace_existing=True
-    )
+                _check_appointments(uid, citas_offsets)
+                _check_tasks(uid, tasks_lead)
+                _check_routines(uid, citas_offsets)
+
+        except Exception as e:
+            app.logger.warning("[sched] main exception: %s", e)
 
     def _heartbeat():
-        app.logger.info("[sched] ⏱️ vivo")
+        app.logger.info("🫀 vivo")
 
-    scheduler.add_job(
-        _heartbeat, IntervalTrigger(seconds=60),
-        id="heartbeat", replace_existing=True, misfire_grace_time=120
-    )
+    # ====== ARRANQUE ======
+    scheduler = BackgroundScheduler(timezone=str(ZoneInfo("UTC")))
+    scheduler.add_job(check_and_send, "interval", seconds=TICK_SECONDS, id="check_and_send")
+    scheduler.add_job(_heartbeat, "interval", minutes=1, id="heartbeat")
+    scheduler.start()
+    app.logger.info("scheduler started (tick=%ss)", TICK_SECONDS)
 
-    def _boot_kick():
-        app.logger.info("[sched] 🚀 boot-kick: ejecutar check_and_send una vez")
-        try:
-            check_and_send()
-            app.logger.info("[sched] ✅ boot-kick OK")
-        except Exception as e:
-            app.logger.exception("[sched] 💥 boot-kick error: %s", e)
-
-    scheduler.add_job(
-        _boot_kick,
-        DateTrigger(run_date=datetime.utcnow() + timedelta(seconds=3)),
-        id="boot-kick", replace_existing=True
-    )
-
-    def _is_true(v: str) -> bool:
-        return (v or "").strip().lower() in {"1", "true", "yes", "on"}
-
-    ENABLE_SCHED = _is_true(os.getenv("ENABLE_SCHEDULER", "true"))
-    try:
-        if ENABLE_SCHED and not scheduler.running:
-            scheduler.start()
-            job = scheduler.get_job("push-tick")
-            nxt = getattr(job, "next_run_time", None)
-            app.logger.info("[sched] ✅ iniciado; next=%s, interval=%ss", nxt, TICK_SECONDS)
-        elif not ENABLE_SCHED:
-            app.logger.info("[sched] ❎ deshabilitado (ENABLE_SCHEDULER=%s)", os.getenv("ENABLE_SCHEDULER"))
-    except Exception as e:
-        app.logger.exception("[sched] 💥 no pudo iniciar: %s", e)
-
-    # Exponer un pequeño helper para el endpoint de debug
-    def debug_info():
-        job = scheduler.get_job("push-tick")
-        return {
-            "running": bool(getattr(scheduler, "running", False)),
-            "next_run": (job.next_run_time.isoformat() if job and job.next_run_time else None),
-            "interval_sec": TICK_SECONDS,
-        }
-
-    # Devolvemos ambos si los quieres usar
-    scheduler.debug_info = debug_info  # type: ignore[attr-defined]
     return scheduler
