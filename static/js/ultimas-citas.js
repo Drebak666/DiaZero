@@ -209,21 +209,28 @@ async function fetchUltimasCitas() {
   const idsCompartidas = (compLinks || []).map(r => r.actividad_id);
 
   // Citas de 3 vías
-  const [propiasRes, grupoRes, compRes] = await Promise.all([
-     supabase.from('appointments')
-.select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
-.or(`owner_id.eq.${uid},usuario.eq.${uid}`),
-    misGrupos.length
-      ? supabase.from('appointments')
-.select('id, description, date, start_time, end_time, completed, owner_id, usuario, grupo_id, requirements')
-  .in('grupo_id', misGrupos)
-      : Promise.resolve({ data: [] }),
-    idsCompartidas.length
-      ? supabase.from('appointments')
-.select('id, description, date, start_time, end_time, completed, usuario, grupo_id, requirements')
- .in('id', idsCompartidas)
-      : Promise.resolve({ data: [] })
-  ]);
+  // Citas de 3 vías
+const [propiasRes, grupoRes, compRes] = await Promise.all([
+  supabase
+    .from('appointments')
+    .select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
+    .eq('owner_id', uid),
+
+  misGrupos.length
+    ? supabase
+        .from('appointments')
+        .select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
+        .in('grupo_id', misGrupos)
+    : Promise.resolve({ data: [] }),
+
+  idsCompartidas.length
+    ? supabase
+        .from('appointments')
+        .select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
+        .in('id', idsCompartidas)
+    : Promise.resolve({ data: [] }),
+]);
+
 
   // Unir TODO y dejar solo próximas (desde hoy), ordenadas por fecha+hora
   const all = uniqById([...(propiasRes.data||[]), ...(grupoRes.data||[]), ...(compRes.data||[])]);
@@ -391,8 +398,9 @@ const hora = c.start_time && c.end_time
 const rest = tiempoRestante(c.date, c.start_time, c.end_time);
 
 // ← Mueve readonly AQUÍ (antes de reqHtml)
-const owner = c.owner_id || c.usuario;
- const readonly = !!(CURRENT_UID && owner !== CURRENT_UID);
+const owner = c.owner_id;
+const readonly = !!(CURRENT_UID && owner !== CURRENT_UID);
+
 
 // requisitos
 const reqs = Array.isArray(c.requirements) ? c.requirements : [];
@@ -500,16 +508,17 @@ inp.addEventListener('change', async () => {
       const req = next[idx];
 
       await supabase
-        .from('tasks')
-        .upsert([{
-          usuario: uid,
-          description: `[Cita] ${item.description || ''} — ${req.text || ''}`,
-          due_date: hoyStr,                              // como al crear cita en add-activity
-          is_completed: !!req.checked,
-          appointment_id: id,
-          grupo_id: item.grupo_id || null,
-          requirement_index: idx
-        }], { onConflict: 'appointment_id,requirement_index' });
+  .from('tasks')
+  .upsert([{
+    owner_id: uid, // ✅ antes: usuario: uid
+    description: `[Cita] ${item.description || ''} — ${req.text || ''}`,
+    due_date: hoyStr,
+    is_completed: !!req.checked,
+    appointment_id: id,
+    grupo_id: item.grupo_id || null,
+    requirement_index: idx
+  }], { onConflict: 'appointment_id,requirement_index' });
+
     } catch(e){
       console.warn('No se pudo sincronizar la tarea del requisito', e);
     }
@@ -748,7 +757,7 @@ try {
   // 1) upsert de todas las tareas de los requisitos actuales (_modalReqs)
   const reqs = _modalReqs || [];
   const rows = reqs.map((r, idx) => ({
-    usuario: uid,
+  owner_id: uid,  // antes: usuario: uid
     description: `[Cita] ${iDesc.value.trim()} — ${r.text || ''}`,
     due_date: hoyStr,
     is_completed: !!r.checked,

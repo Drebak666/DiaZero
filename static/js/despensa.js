@@ -34,7 +34,7 @@ async function cargarListaIngredientes() {
   const { data, error } = await supabase
     .from('ingredientes_base')
     .select('id, description, unidad')
-    .eq('usuario_id', uid)
+    .eq('owner_id', uid)
     .order('description', { ascending: true });
 
   if (error) {
@@ -60,7 +60,7 @@ async function cargarDespensa() {
   const { data: despensa, error } = await supabase
     .from('despensa')
     .select('id, nombre, cantidad, unidad')
-    .eq('usuario_id', uid)
+    .eq('owner_id', uid)
     .order('nombre', { ascending: true });
 
   if (error) {
@@ -78,7 +78,7 @@ async function cargarDespensa() {
   const { data: ingredientesBase, error: errorBase } = await supabase
     .from('ingredientes_base')
     .select('description, cantidad, unidad')
-    .eq('usuario_id', uid);
+    .eq('owner_id', uid);
 
   if (errorBase) {
     console.warn('No se pudieron cargar referencias de ingredientes_base:', errorBase.message);
@@ -93,7 +93,7 @@ async function cargarDespensa() {
     const { data: lcUid } = await supabase
       .from('lista_compra')
       .select('nombre')
-      .eq('usuario_id', uid);
+      .eq('owner_id', uid);
     listaCompra = lcUid;
 
     // Fallback si aún no migraste lista_compra a usuario_id
@@ -206,7 +206,7 @@ if (form) {
 
     const { error } = await supabase
       .from('despensa')
-      .insert([{ nombre, cantidad, unidad, usuario_id: uid }]);
+      .insert([{ nombre, cantidad, unidad, owner_id: uid }]);
 
     if (error) {
       alert('Error al guardar el ingrediente: ' + error.message);

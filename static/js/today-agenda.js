@@ -30,6 +30,25 @@ function daysLeft(dateStr){
   const d=new Date(dateStr); d.setHours(0,0,0,0);
   return Math.round((d - t)/86400000);
 }
+
+function minutos(hhmm){ if(!hhmm) return null; const [h,m]=hhmm.split(':').map(Number); return h*60+m; }
+function rankItem(it, nowMin){
+  const st=minutos(it.start_time), en=minutos(it.end_time), done=!!it.is_completed;
+  if (done) return 6;                                         // 6) completadas
+  if (st!=null && en!=null && st<=nowMin && nowMin<en) return 1; // 1) vigente
+  if (st!=null && nowMin<st) return 2;                        // 2) próximas con hora
+  if (en!=null && en<=nowMin) return 3;                       // 3) pasadas sin marcar
+  if (st==null && en==null) return 4;                         // 4) sin hora
+  return 5;                                                   // 5) resto (docs/otros)
+}
+function cmpAgenda(a,b,nowMin){
+  const ra=rankItem(a,nowMin), rb=rankItem(b,nowMin);
+  if (ra!==rb) return ra-rb;
+  if (ra===1 || ra===2) return (a.start_time||'').localeCompare(b.start_time||''); // por iniciar/en curso
+  if (ra===3) return (b.end_time||'').localeCompare(a.end_time||'');              // pasadas: fin DESC
+  return 0;
+}
+
 const uniqById = (rows) => { const m = new Map(); (rows||[]).forEach(r => m.set(r.id, r)); return [...m.values()]; };
 
 // Filtra "Hoy" solo por due_date (tu tabla no tiene 'date')
@@ -52,12 +71,61 @@ async function cargarAgendaHoy() {
 
 
 // --- LIMPIEZA/MOVIMIENTO AUTOMÁTICO ---
-// BORRAR completadas anteriores a hoy (solo due_date)
-await supabase.from('tasks')
-  .delete()
-  .lt('due_date', hoyStr)
-  .eq('is_completed', true)
-    .eq('owner_id', uid); // <-- antes 'usuario'
+// BORRAR completadas anteriores a hoy (solo due_date) + DESMARCAR requisitos vinculados
+{
+  // 1) Obtener las tasks que se van a borrar
+  const { data: toDel, error: eRead } = await supabase
+    .from('tasks')
+    .select('id, appointment_id, requirement_index')
+    .lt('due_date', hoyStr)
+    .eq('is_completed', true)
+    .eq('owner_id', uid);
+
+  if (!eRead && (toDel?.length)) {
+    // 2) Agrupar por cita y recoger los índices de requisitos
+    const apptMap = new Map(); // citaId -> Set(idx)
+    toDel.forEach(t => {
+      if (t.appointment_id && t.requirement_index != null) {
+        const idx = Number(t.requirement_index);
+        if (!apptMap.has(t.appointment_id)) apptMap.set(t.appointment_id, new Set());
+        apptMap.get(t.appointment_id).add(idx);
+      }
+    });
+
+    // 3) Desmarcar en appointments.requirements los índices afectados
+    if (apptMap.size) {
+      const apptIds = [...apptMap.keys()];
+      const { data: appts } = await supabase
+        .from('appointments')
+        .select('id, requirements')
+        .in('id', apptIds);
+
+      for (const a of (appts || [])) {
+        if (!Array.isArray(a.requirements)) continue;
+        const idxSet = apptMap.get(a.id) || new Set();
+        const nextReqs = a.requirements.map((r, i) =>
+          idxSet.has(i) ? { ...(r || {}), checked: false } : r
+        );
+        await supabase.from('appointments').update({ requirements: nextReqs }).eq('id', a.id);
+      }
+    }
+
+    // 4) Ahora sí, borrar definitivamente esas tasks
+    await supabase
+      .from('tasks')
+      .delete()
+      .in('id', toDel.map(t => t.id));
+  } else {
+    // Si no hay ninguna que sincronizar, borrar por el criterio original
+    await supabase
+      .from('tasks')
+      .delete()
+      .lt('due_date', hoyStr)
+      .eq('is_completed', true)
+      .eq('owner_id', uid);
+  }
+}
+
 
 
 // MOVER a hoy las NO completadas anteriores a hoy (solo due_date)
@@ -105,7 +173,7 @@ const idsRutinasCompartidas = (rLinks || [])
 
 // ✅ TAREAS HOY: propias + grupo + compartidas (solo due_date)
 const [tOwn, tGrp, tInd] = await Promise.all([
-  supabase.from('tasks').select('*').eq('owner_id', uid), // <-- antes 'usuario'
+  filtroHoy(supabase.from('tasks').select('*').eq('owner_id', uid), hoyStr),
   misGrupos.length
     ? filtroHoy(supabase.from('tasks').select('*').in('grupo_id', misGrupos), hoyStr)
     : Promise.resolve({ data: [] }),
@@ -113,6 +181,7 @@ const [tOwn, tGrp, tInd] = await Promise.all([
     ? filtroHoy(supabase.from('tasks').select('*').in('id', idsTareasCompartidas), hoyStr)
     : Promise.resolve({ data: [] }),
 ]);
+
 
 const tareas = uniqById([
   ...(tOwn?.data ?? []),
@@ -213,86 +282,59 @@ function renderizarActividades(actividades) {
     return;
   }
 
-  const ordenPrioridad = { tarea:1, rutina:2, requisito:3, documento:4, mejora:5 };
+  // ===== ORDEN NUEVO =====
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const MM = (hhmm) => { if (!hhmm) return null; const [h,m]=hhmm.split(':').map(Number); return h*60+m; };
+  const esDoc    = (a) => (a.tipo === 'Tarea' && a.document_id != null);
+  const conHora  = (a) => !!(a.start && a.start.includes(':') && a.end && a.end.includes(':'));
+  const enCurso  = (a) => {
+    if (!conHora(a)) return false;
+    const st = MM(a.start), en = MM(a.end);
+    return st!=null && en!=null && st <= nowMin && nowMin < en;
+  };
 
-  function subtipoParaOrden(x) {
-    if (x.tipo === 'Rutina') return 'rutina';
-    if (x.tipo === 'Tarea') {
-      if (x.appointment_id != null && x.requirement_index != null) return 'requisito';
-      if (x.improvement_id != null) return (x.start && x.start.includes(':')) ? 'tarea' : 'mejora';
-      if (x.document_id != null) return 'documento';
-      return 'tarea';
-    }
-    return 'tarea';
-  }
-
-  actividades.sort((a, b) => {
-    if (a.completado !== b.completado) return a.completado ? 1 : -1;
-    const sa = subtipoParaOrden(a), sb = subtipoParaOrden(b);
-    if (sa !== sb) return (ordenPrioridad[sa] || 99) - (ordenPrioridad[sb] || 99);
-    return (a.start || '').localeCompare(b.start || '');
-  });
-
-  // === ORDEN NUEVO ===
-  const timedActive = [], sinHora = [], documentos = [], completadas = [];
+  const enCursoA = [], proximas = [], pasadas = [], sinHora = [], documentos = [], completadas = [];
   for (const a of actividades) {
     if (a.completado) { completadas.push(a); continue; }
-    const esDoc = (a.tipo === 'Tarea' && a.document_id != null);
-    const tieneHora = !!(a.start && a.start.includes(':'));
-    if (esDoc) documentos.push(a);
-    else if (tieneHora) timedActive.push(a);
-    else sinHora.push(a);
+    if (esDoc(a))     { documentos.push(a);  continue; }
+    if (conHora(a)) {
+      const st = MM(a.start), en = MM(a.end);
+      if (st!=null && en!=null) {
+        if (enCurso(a)) enCursoA.push(a);
+        else if (nowMin < st) proximas.push(a);
+        else pasadas.push(a);
+        continue;
+      }
+    }
+    sinHora.push(a);
   }
-  timedActive.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-  documentos.sort((a, b) => {
-    const la = (a.doc_days_left ?? 9e9), lb = (b.doc_days_left ?? 9e9);
-    if (la !== lb) return la - lb;
-    return (a.descripcion || '').localeCompare(b.descripcion || '');
-  });
-  completadas.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
-  const lista = [...timedActive, ...sinHora, ...documentos, ...completadas];
 
+  enCursoA.sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  proximas.sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  pasadas.sort((a,b)=>(b.end||'').localeCompare(a.end||''));
+  sinHora.sort((a,b)=>(a.descripcion||'').localeCompare(b.descripcion||''));
+  documentos.sort((a,b)=>(a.descripcion||'').localeCompare(b.descripcion||''));
+
+  const lista = [...enCursoA, ...proximas, ...pasadas, ...sinHora, ...documentos];
+
+  // ===== PINTAR (todo menos completadas) =====
   lista.forEach(act => {
     const actDiv = document.createElement('div');
     actDiv.classList.add('actividad-item', act.tipo.toLowerCase());
     if (act.completado) actDiv.classList.add('actividad-completada');
 
     const subtipo =
-      (act.tipo === 'Tarea' && act.appointment_id != null && act.requirement_index != null) ? 'requisito' :
-      (act.tipo === 'Tarea' && act.improvement_id != null)                                   ? 'mejora'    :
-      (act.tipo === 'Tarea' && act.document_id != null)                                      ? 'documento' :
-      (act.tipo === 'Rutina')                                                                ? 'rutina'    :
-                                                                                                'tarea';
+      (act.tipo==='Tarea' && act.appointment_id!=null && act.requirement_index!=null) ? 'requisito' :
+      (act.tipo==='Tarea' && act.improvement_id!=null)                                 ? 'mejora'    :
+      (act.tipo==='Tarea' && act.document_id!=null)                                    ? 'documento' :
+      (act.tipo==='Rutina')                                                            ? 'rutina'    : 'tarea';
     actDiv.classList.add(`subtipo-${subtipo}`);
 
-// SIEMPRE: datos para el cálculo de huecos (también en rutinas)
-    actDiv.dataset.id      = act.id;
-    actDiv.dataset.subtipo = subtipo;
-    actDiv.dataset.sinHora = act.start ? '0' : '1';
-    actDiv.dataset.tipo    = subtipo;          // 'tarea' | 'rutina' | 'requisito' | 'mejora' | 'documento'
-    actDiv.dataset.start   = act.start || '';  // 'HH:MM' o ''
-    actDiv.dataset.end     = act.end   || '';
-
-    const esArrastrable = (subtipo === 'tarea' || subtipo === 'requisito' || subtipo === 'mejora') && !act.completado;
-    if (esArrastrable) {
-      actDiv.setAttribute('draggable', 'true');
-      actDiv.classList.add('draggable-task');
-    }
-
-    if (act.tipo === 'Tarea' && act.document_id) {
-      actDiv.classList.add('actividad-doc');
-      const left = act.doc_days_left;
-      if (left != null) {
-        if (left < 0)        actDiv.classList.add('estado-expired');
-        else if (left === 0) actDiv.classList.add('estado-today');
-        else if (left <= 30) actDiv.classList.add('estado-soon');
-      }
-    }
-
-    // Tiempo / estado (incluye "En curso")
+    // tiempo/estado
     let tiempo = '';
     let startsSoon = false;
-    let enCurso = false;
+    let estaEnCurso = false;
 
     if (act.start && act.start.includes(':')) {
       const [sh, sm] = act.start.split(':').map(Number);
@@ -310,15 +352,15 @@ function renderizarActividades(actividades) {
         const diffFin = fin - new Date();
 
         if (diffFin > 0) {
-          enCurso = true;
+          estaEnCurso = true;
           const min = Math.floor(diffFin / 60000);
           if (min >= 60) { const horas = Math.floor(min / 60); const minutos = min % 60; tiempo = `Termina en ${horas} h${minutos ? ` ${minutos} min` : ''}`; }
           else { tiempo = `Termina en ${min} min`; }
         } else { tiempo = 'Terminada'; }
-      } else { tiempo = 'En curso'; enCurso = true; }
+      } else { tiempo = 'En curso'; estaEnCurso = true; }
     } else { tiempo = 'Sin hora'; }
 
-    // Descripción
+    // descripción + chips
     let descripcionHTML = limpiarEtiquetasDescripcion(act.descripcion);
     if (act.tipo === 'Tarea' && act.document_id) {
       descripcionHTML = descripcionHTML.replace(
@@ -328,22 +370,34 @@ function renderizarActividades(actividades) {
     }
 
     const esRequisitoDeCita = act.tipo === 'Tarea' && act.appointment_id != null && act.requirement_index != null;
-    const esDoc = act.tipo === 'Tarea' && act.document_id != null;
-   const borrarBtnHtml = (esRequisitoDeCita || esDoc) ? '' : `
-     <button class="btn-borrar" data-id="${act.id}" data-tipo="${act.tipo}"
-             ${act.appointment_id != null ? `data-aid="${act.appointment_id}"` : ''}
-             ${act.requirement_index != null ? `data-idx="${act.requirement_index}"` : ''}>
-       <span class="circle-btn red">🗑️</span>
-     </button>`;
-      const checkBtnHtml = (act.tipo === 'Tarea') ? `
-  <button class="btn-check" data-id="${act.id}" data-tipo="${act.tipo}" data-completado="${act.completado}"
-          ${act.appointment_id != null ? `data-aid="${act.appointment_id}"` : ''}
-          ${act.requirement_index != null ? `data-idx="${act.requirement_index}"` : ''}
-          ${act.improvement_id != null ? `data-improvement-id="${act.improvement_id}"` : ''}>
-    <span class="circle-btn green">✔️</span>
-  </button>` : '';
+    const esDocumento = act.tipo === 'Tarea' && act.document_id != null;
+    const borrarBtnHtml = (esRequisitoDeCita || esDocumento) ? '' : `
+      <button class="btn-borrar" data-id="${act.id}" data-tipo="${act.tipo}"
+              ${act.appointment_id != null ? `data-aid="${act.appointment_id}"` : ''}
+              ${act.requirement_index != null ? `data-idx="${act.requirement_index}"` : ''}>
+        <span class="circle-btn red">🗑️</span>
+      </button>`;
 
+    const checkBtnHtml = (act.tipo === 'Tarea') ? `
+      <button class="btn-check" data-id="${act.id}" data-tipo="${act.tipo}" data-completado="${act.completado}"
+              ${act.appointment_id != null ? `data-aid="${act.appointment_id}"` : ''}
+              ${act.requirement_index != null ? `data-idx="${act.requirement_index}"` : ''}
+              ${act.improvement_id != null ? `data-improvement-id="${act.improvement_id}"` : ''}>
+        <span class="circle-btn green">✔️</span>
+      </button>` : '';
 
+    actDiv.dataset.id   = act.id;
+    actDiv.dataset.tipo = act.tipo.toLowerCase();
+    actDiv.dataset.start = act.start || '';
+    actDiv.dataset.end   = act.end   || '';
+if (act.tipo === 'Tarea' && !act.completado) {
+  actDiv.classList.add('draggable-task');
+  actDiv.setAttribute('draggable', 'true');
+} else {
+  actDiv.removeAttribute('draggable');
+}
+    if (estaEnCurso && !act.completado) actDiv.classList.add('actividad-encurso');
+    if (startsSoon && !act.completado)  actDiv.classList.add('latido');
 
     actDiv.innerHTML = `
       <div class="actividad-info">
@@ -358,31 +412,85 @@ function renderizarActividades(actividades) {
         </span>
         <span class="actividad-tiempo">${tiempo}</span>
       </div>
-     <div class="actividad-actions">
-  ${checkBtnHtml}
-  <button class="btn-editar" data-id="${act.id}" data-tipo="${act.tipo}">
-    <span class="circle-btn yellow">✏️</span>
-  </button>
-  ${borrarBtnHtml}
-</div>
-
+      <div class="actividad-actions">
+        ${checkBtnHtml}
+        <button class="btn-editar" data-id="${act.id}" data-tipo="${act.tipo}">
+          <span class="circle-btn yellow">✏️</span>
+        </button>
+        ${borrarBtnHtml}
+      </div>
     `;
-
-    if (startsSoon && !act.completado) actDiv.classList.add('latido');
-    if (enCurso && !act.completado)    actDiv.classList.add('actividad-encurso');
 
     container.appendChild(actDiv);
   });
 
+  // ===== COMPLETADAS (plegadas) =====
+  if (completadas.length) {
+    const details = document.createElement('details');
+    details.className = 'completadas-bloque';
+    details.open = false;
+    const summary = document.createElement('summary');
+    summary.textContent = `✔️ Completadas (${completadas.length})`;
+    details.appendChild(summary);
+
+    const cont = document.createElement('div');
+    completadas.forEach(act => {
+      const el = document.createElement('div');
+      el.className = 'actividad-item actividad-completada';
+      el.innerHTML = `
+        <div class="actividad-info">
+          <span class="actividad-hora">
+            ${formatHora(act.start)}${formatHora(act.end) ? ` - ${formatHora(act.end)}` : ''}
+          </span>
+          <span class="actividad-descripcion">${limpiarEtiquetasDescripcion(act.descripcion)}</span>
+          <span class="actividad-tiempo">Completada</span>
+        </div>`;
+      cont.appendChild(el);
+    });
+
+    details.appendChild(cont);
+    container.appendChild(details);
+  }
+
   agregarEventos();
   initDragAndDropTareas();
 }
+
 
 function parseHHMM(str) { if (!str || !str.includes(':')) return null; const [h, m] = str.split(':').map(Number); return Number.isInteger(h)&&Number.isInteger(m)?{h,m}:null; }
 function fmtHHMM({h, m}) { return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
 function addMinutes({h, m}, add){ let tot=h*60+m+add; tot=((tot%1440)+1440)%1440; return {h:Math.floor(tot/60), m:tot%60}; }
 function roundToNext15({h, m}){ const t=h*60+m; const r=Math.ceil(t/15)*15; return {h:Math.floor(r/60), m:r%60}; }
 function duracionPorDefecto(subtipo){ if (subtipo==='requisito') return 15; if (subtipo==='mejora') return 25; return 30; }
+
+function normalizaRango(iniStr, finStr, subtipo = 'tarea') {
+  const def = duracionPorDefecto(subtipo) || 30;
+  const ini = parseHHMM(iniStr);
+  const fin = parseHHMM(finStr);
+
+  if (!ini && !fin) return { ini: null, fin: null }; // sin hora
+
+  if (ini && !fin) {
+    const finCalc = addMinutes(ini, def);
+    return { ini: fmtHHMM(ini), fin: fmtHHMM(finCalc) };
+  }
+
+  if (!ini && fin) {
+    // si solo dan fin, ponemos inicio = fin - def
+    const iniCalc = addMinutes(fin, -def);
+    return { ini: fmtHHMM(iniCalc), fin: fmtHHMM(fin) };
+  }
+
+  // ambos existen: asegurar fin > ini; si no, empujamos fin a +def
+  const iniMin = ini.h * 60 + ini.m;
+  const finMin = fin.h * 60 + fin.m;
+  if (finMin <= iniMin) {
+    const finCalc = addMinutes(ini, def);
+    return { ini: fmtHHMM(ini), fin: fmtHHMM(finCalc) };
+  }
+  return { ini: fmtHHMM(ini), fin: fmtHHMM(fin) };
+}
+
 
 // DnD simple (sin rutinas): reordena y reasigna horas en secuencia
 async function initDragAndDropTareas(){
@@ -460,9 +568,11 @@ async function initDragAndDropTareas(){
   hint.className='drop-hint';
   placeholder.appendChild(hint);
 
-  root.addEventListener('dragstart', (e)=>{
-    const el = e.target.closest('.actividad-item.draggable-task');
-    if (!el) return;
+ root.addEventListener('dragstart', (e)=>{
+  const t = e.target;
+  if (!(t instanceof Element)) return;
+  const el = t.closest('.actividad-item.draggable-task');
+  if (!el) return;
     dragging = el;
     dragging.classList.add('dragging');
     e.dataTransfer.effectAllowed='move';
@@ -539,8 +649,10 @@ function agregarEventos() {
 
   // Delegación de eventos en un único listener
   root.addEventListener('click', async (ev) => {
-    const btn = ev.target.closest('button');
-    if (!btn) return;
+  const t = ev.target;
+  if (!(t instanceof Element)) return;
+  const btn = t.closest('button');
+  if (!btn) return;
 
 // 1) COMPLETAR / DESCOMPLETAR
 if (btn.classList.contains('btn-check')) {
@@ -593,52 +705,79 @@ if (btn.classList.contains('btn-check')) {
 
 
 
-    // 2) EDITAR
-// 2) EDITAR
 // 2) EDITAR
 if (btn.classList.contains('btn-editar')) {
   const id   = btn.dataset.id;
   const tipo = btn.dataset.tipo;
 
   if (tipo === 'Tarea') {
-    const { data, error } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
 
-    if (error || !data) { alert('No se pudo abrir la tarea.'); return; }
+  if (error || !data) { alert('No se pudo abrir la tarea.'); return; }
 
-    document.getElementById('editar-id-tarea').value = data.id;
-    document.getElementById('editar-tipo').value     = 'Tarea';
-    document.getElementById('editar-descripcion-tarea').value = data.description || '';
-    document.getElementById('editar-fecha-tarea').value       = (data.due_date || '').slice(0,10);
-    document.getElementById('editar-hora-inicio-tarea').value = (data.start_time || '').slice(0,5);
-    document.getElementById('editar-hora-fin-tarea').value    = (data.end_time   || '').slice(0,5);
-    document.getElementById('form-editar-tarea').classList.remove('oculto');
-    return;
-  }
+  document.getElementById('editar-id-tarea').value = data.id;
+  document.getElementById('editar-tipo').value     = 'Tarea';
+  document.getElementById('editar-descripcion-tarea').value = data.description || '';
+  document.getElementById('editar-fecha-tarea').value       = (data.due_date || '').slice(0,10);
+  document.getElementById('editar-hora-inicio-tarea').value = (data.start_time || '').slice(0,5);
+  document.getElementById('editar-hora-fin-tarea').value    = (data.end_time   || '').slice(0,5);
+
+  // ✅ Normaliza antes de enseñar el modal
+  const nrm = normalizaRango(
+    document.getElementById('editar-hora-inicio-tarea').value || '',
+    document.getElementById('editar-hora-fin-tarea').value || '',
+    'tarea'
+  );
+  document.getElementById('editar-hora-inicio-tarea').value = nrm.ini || '';
+  document.getElementById('editar-hora-fin-tarea').value    = nrm.fin || '';
+
+  document.getElementById('form-editar-tarea').classList.remove('oculto');
+  return;
+}
+
+
+  // Tras setear los valores:
+const subtipo = (tipo === 'Rutina') ? 'rutina' : 'tarea';
+const ini0 = document.getElementById('editar-hora-inicio-tarea').value || '';
+const fin0 = document.getElementById('editar-hora-fin-tarea').value || '';
+const nrm0 = normalizaRango(ini0, fin0, subtipo);
+document.getElementById('editar-hora-inicio-tarea').value = nrm0.ini || '';
+document.getElementById('editar-hora-fin-tarea').value    = nrm0.fin || '';
+
 
   if (tipo === 'Rutina') {
-    // ⚠️ si tu tabla se llama distinto, cambia 'routines'
-    const { data, error } = await supabase
-      .from('routines')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
+  const { data, error } = await supabase
+    .from('routines')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
 
-    if (error || !data) { alert('No se pudo abrir la rutina.'); return; }
+  if (error || !data) { alert('No se pudo abrir la rutina.'); return; }
 
-    document.getElementById('editar-id-tarea').value = data.id;
-    document.getElementById('editar-tipo').value     = 'Rutina';
-    document.getElementById('editar-descripcion-tarea').value = data.description || '';
-    // En routines usamos 'date'
-    document.getElementById('editar-fecha-tarea').value       = (data.date || '').slice(0,10);
-    document.getElementById('editar-hora-inicio-tarea').value = (data.start_time || '').slice(0,5);
-    document.getElementById('editar-hora-fin-tarea').value    = (data.end_time   || '').slice(0,5);
-    document.getElementById('form-editar-tarea').classList.remove('oculto');
-    return;
-  }
+  document.getElementById('editar-id-tarea').value = data.id;
+  document.getElementById('editar-tipo').value     = 'Rutina';
+  document.getElementById('editar-descripcion-tarea').value = data.description || '';
+  document.getElementById('editar-fecha-tarea').value       = (data.date || '').slice(0,10);
+  document.getElementById('editar-hora-inicio-tarea').value = (data.start_time || '').slice(0,5);
+  document.getElementById('editar-hora-fin-tarea').value    = (data.end_time   || '').slice(0,5);
+
+  // ✅ Normaliza antes de enseñar el modal
+  const nrm = normalizaRango(
+    document.getElementById('editar-hora-inicio-tarea').value || '',
+    document.getElementById('editar-hora-fin-tarea').value || '',
+    'rutina'
+  );
+  document.getElementById('editar-hora-inicio-tarea').value = nrm.ini || '';
+  document.getElementById('editar-hora-fin-tarea').value    = nrm.fin || '';
+
+  document.getElementById('form-editar-tarea').classList.remove('oculto');
+  return;
+}
+
 }
 
 
@@ -700,13 +839,16 @@ formEditTarea?.addEventListener('submit', async (ev) => {
   const tipo  = document.getElementById('editar-tipo').value || 'Tarea';
   const desc  = document.getElementById('editar-descripcion-tarea').value.trim();
   const fecha = document.getElementById('editar-fecha-tarea').value || null;
-  const ini   = document.getElementById('editar-hora-inicio-tarea').value || null;
-  const fin   = document.getElementById('editar-hora-fin-tarea').value || null;
+  const ini   = document.getElementById('editar-hora-inicio-tarea').value || '';
+  const fin   = document.getElementById('editar-hora-fin-tarea').value || '';
+
+  // ✅ Normaliza antes de construir el update
+  const { ini: iniN, fin: finN } = normalizaRango(ini, fin, (tipo === 'Rutina') ? 'rutina' : 'tarea');
 
   const table  = (tipo === 'Rutina') ? 'routines' : 'tasks';
   const update = (tipo === 'Rutina')
-    ? { description: desc || null, date: fecha, start_time: ini, end_time: fin }
-    : { description: desc || null, due_date: fecha, start_time: ini, end_time: fin };
+    ? { description: desc || null, date: fecha,     start_time: iniN, end_time: finN }
+    : { description: desc || null, due_date: fecha, start_time: iniN, end_time: finN };
 
   const { error } = await supabase.from(table).update(update).eq('id', id);
   if (error) { alert('No se pudo guardar.'); return; }
@@ -714,4 +856,20 @@ formEditTarea?.addEventListener('submit', async (ev) => {
   document.getElementById('form-editar-tarea').classList.add('oculto');
   await cargarAgendaHoy();
 });
+
+
+const $ini = document.getElementById('editar-hora-inicio-tarea');
+const $fin = document.getElementById('editar-hora-fin-tarea');
+
+function autoAjustar() {
+  const tipo = document.getElementById('editar-tipo').value || 'Tarea';
+  const subtipo = (tipo === 'Rutina') ? 'rutina' : 'tarea';
+  const n = normalizaRango($ini.value || '', $fin.value || '', subtipo);
+  $ini.value = n.ini || '';
+  $fin.value = n.fin || '';
+}
+
+$ini?.addEventListener('change', autoAjustar);
+$fin?.addEventListener('change', autoAjustar);
+
 

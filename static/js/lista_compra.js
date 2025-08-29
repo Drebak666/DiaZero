@@ -74,7 +74,7 @@ form.addEventListener('submit', async (e) => {
 
   const nombres = [...new Set(resultado.map(s => s.trim()).filter(Boolean))];
   for (const nombre of nombres) {
-    await supabase.from('lista_compra').insert([{ nombre, usuario_id: uid }]);
+await supabase.from('lista_compra').insert([{ nombre, owner_id: uid }]);
   }
 
   inputNombre.value = '';
@@ -89,10 +89,10 @@ async function cargarLista() {
   if (!uid) return;
 
   const { data: lista } = await supabase
-    .from('lista_compra')
-    .select('id, nombre, completado, cantidad, unidad, created_at')
-    .eq('usuario_id', uid)
-    .order('created_at', { ascending: true });
+  .from('lista_compra')
+  .select('id, nombre, completado, cantidad, unidad, created_at')
+  .eq('owner_id', uid)
+  .order('created_at', { ascending: true });
 
   if (!lista || lista.length === 0) {
     container.innerHTML = '<p>No hay ingredientes en la lista.</p>';
@@ -107,9 +107,9 @@ async function cargarLista() {
 
   // catálogo del usuario (TABLA BASE)
   const { data: ingredientes } = await supabase
-    .from('ingredientes_base')
-    .select('description, supermercado, precio, cantidad, unidad')
-    .eq('usuario_id', uid);
+  .from('ingredientes_base')
+  .select('description, supermercado, precio, cantidad, unidad')
+  .eq('owner_id', uid);
 
   const mapaIngredientes = new Map();
   const supermercadosUnicos = new Set();
@@ -292,10 +292,10 @@ document.getElementById('agregar-completados-despensa').addEventListener('click'
   if (!uid) return;
 
   const { data: completados } = await supabase
-    .from('lista_compra')
-    .select('*')
-    .eq('completado', true)
-    .eq('usuario_id', uid);
+  .from('lista_compra')
+  .select('*')
+  .eq('completado', true)
+  .eq('owner_id', uid);
 
   for (const item of (completados || [])) {
     // pack base desde ingredientes_base
@@ -303,7 +303,7 @@ document.getElementById('agregar-completados-despensa').addEventListener('click'
       .from('ingredientes_base')
       .select('cantidad, unidad')
       .eq('description', item.nombre)
-      .eq('usuario_id', uid)
+      .eq('owner_id', uid)
       .maybeSingle();
 
     const cantidadComprada = datosIngrediente?.cantidad ?? 1;
@@ -315,7 +315,7 @@ document.getElementById('agregar-completados-despensa').addEventListener('click'
       .select('id, cantidad')
       .eq('nombre', item.nombre)
       .eq('unidad', unidadComprada)
-      .eq('usuario_id', uid)
+      .eq('owner_id', uid)
       .maybeSingle();
 
     if (existente) {
@@ -325,11 +325,11 @@ document.getElementById('agregar-completados-despensa').addEventListener('click'
         .eq('id', existente.id);
     } else {
       await supabase.from('despensa').insert([{
-        nombre: item.nombre,
-        cantidad: cantidadComprada,
-        unidad: unidadComprada,
-        usuario_id: uid
-      }]);
+  nombre: item.nombre,
+  cantidad: cantidadComprada,
+  unidad: unidadComprada,
+  owner_id: uid
+}]);
     }
 
     // borrar ese item de la lista
@@ -349,10 +349,10 @@ async function cargarPendientes() {
   if (!uid) return;
 
   const { data: pendientes } = await supabase
-    .from('despensa')
-    .select('*')
-    .eq('usuario_id', uid)
-    .order('created_at', { ascending: true });
+  .from('despensa')
+  .select('*')
+  .eq('owner_id', uid)
+  .order('created_at', { ascending: true });
 
   const contPendientes = document.getElementById('pendientes-container');
   if (!contPendientes) return;
@@ -368,10 +368,10 @@ async function actualizarContadorLista() {
   if (!uid) return;
 
   const { data } = await supabase
-    .from('lista_compra')
-    .select('id')
-    .eq('usuario_id', uid)
-    .eq('completado', false);
+  .from('lista_compra')
+  .select('id')
+  .eq('owner_id', uid)
+  .eq('completado', false);
 
   const cantidad = data?.length ?? 0;
   document.querySelectorAll('.contador-lista').forEach(span => { span.textContent = cantidad; });

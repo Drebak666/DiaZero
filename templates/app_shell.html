@@ -246,7 +246,17 @@
     });
   })();
 </script>
-
+<script>
+const miniClock = document.getElementById('mini-clock');
+document.querySelectorAll('input, textarea').forEach(inp=>{
+  inp.addEventListener('focus', ()=>{
+    miniClock.style.bottom = '200px';  // lo subes temporalmente
+  });
+  inp.addEventListener('blur', ()=>{
+    miniClock.style.bottom = '14px';   // vuelve a su sitio
+  });
+});
+</script>
 
 </body>
 </html>

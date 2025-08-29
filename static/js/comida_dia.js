@@ -165,7 +165,7 @@ async function cargarComidaDelDia() {
         id, is_completed, tipo, receta_id, personas,
         recetas (
           nombre,
-          ingredientes_receta ( cantidad, unidad, ingrediente_id )
+  ingredientes_receta!fk_ir_receta ( cantidad, unidad, ingrediente_id )
         )
       `)
       .eq('fecha', hoy)
@@ -236,7 +236,8 @@ if (miembroIds.length) {
   .from('ingredientes_base')
   .select('id, description, precio, cantidad, calorias, proteinas, unidad')
   .in('id', idsIngredientes)
-  .eq('usuario', usuarioId);
+
+
 if (!ingData || ingData.length === 0) {
 
           const alt = await supabase
@@ -393,7 +394,7 @@ if (!ingData || ingData.length === 0) {
               .select('id, cantidad')
               .eq('nombre', nombreIng)
               .eq('unidad', ingBase.unidad)
-              .eq('usuario', usuarioActivo)
+  .eq('usuario', usuarioActivo)      // ✅ vuelve a 'usuario'
               .maybeSingle();
 
             if (despensaItem) {
@@ -403,7 +404,7 @@ if (!ingData || ingData.length === 0) {
                 .from('despensa')
                 .update({ cantidad: nuevaCantidad })
                 .eq('id', despensaItem.id)
-                .eq('usuario', usuarioActivo);
+  .eq('usuario', usuarioActivo)      // ✅ vuelve a 'usuario'
             }
           }
         }

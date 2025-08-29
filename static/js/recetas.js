@@ -54,8 +54,7 @@ export async function cargarIngredientesParaReceta() {
   const { data, error } = await supabase
     .from('ingredientes_base')
     .select('id, description, unidad, calorias, proteinas, precio, cantidad')
-    .eq('usuario_id', uid);
-
+.eq('owner_id', uid);
   if (error) {
     showMessageModal('Error al cargar ingredientes: ' + error.message);
     return;
@@ -139,7 +138,7 @@ export async function guardarReceta() {
     // Guardar receta con UID
     const { data: receta, error: recetaError } = await supabase
       .from('recetas')
-      .insert([{ nombre, instrucciones, ingredientes: ingredientesJSON, usuario_id: uid }])
+      .insert([{ nombre, instrucciones, ingredientes: ingredientesJSON, owner_id: uid }])
       .select()
       .single();
 

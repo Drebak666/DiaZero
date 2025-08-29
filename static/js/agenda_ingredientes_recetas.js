@@ -3,9 +3,14 @@ import { supabase } from './supabaseClient.js';
 import { calcularTotalesReceta } from '../utils/calculos_ingredientes.js';
 import { getUsuarioActivo } from './usuario.js';
 
+
+
 // Espera a que el DOM esté completamente cargado
 document.addEventListener('DOMContentLoaded', async () => {
-  const usuarioActivo = getUsuarioActivo();
+  // UID real (uuid) del usuario autenticado
+const { data: { user } } = await supabase.auth.getUser();
+const uid = user?.id || null;
+
 
   // Estado
   let ingredientes = []; // ingredientes_base
@@ -134,7 +139,7 @@ buscadorRecetas?.addEventListener('input', debounce(e => filtrarRecetas(e.target
     const { data, error } = await supabase
       .from('ingredientes_base')
       .select('*')
-      .eq('usuario', usuarioActivo); // filtra por usuario activo
+  .eq('owner_id', uid); // <- antes: .eq('usuario', usuarioActivo)
 
     if (error) {
       console.error('Error cargando ingredientes_base:', error);
@@ -193,7 +198,9 @@ function mostrarIngredientes(lista = ingredientes) {
     const { data, error } = await supabase
       .from('recetas')
       .select('*')
-      .eq('usuario', usuarioActivo);
+  .eq('owner_id', uid);   // ← antes: .eq('usuario', usuarioActivo)
+
+
 
     if (error) {
       console.error('Error cargando recetas:', error);
@@ -210,7 +217,7 @@ function mostrarIngredientes(lista = ingredientes) {
   for (const rec of lista) {
     const { data: ingReceta, error: ingErr } = await supabase
       .from('ingredientes_receta')
-      .select('*, ingrediente:ingrediente_id (id, description)')
+.select('*, ingrediente:ingredientes_base!fk_ir_ingrediente (id, description)')
       .eq('receta_id', rec.id);
 
     if (ingErr) {
@@ -320,7 +327,7 @@ function mostrarIngredientes(lista = ingredientes) {
       const { data: receta, error: recetaError } = await supabase.from('recetas').select('*').eq('id', id).single();
       const { data: ingReceta, error: ingRecetaError } = await supabase
         .from('ingredientes_receta')
-        .select('*, ingrediente:ingrediente_id (id, description)')
+.select('*, ingrediente:ingredientes_base!fk_ir_ingrediente (id, description)')
         .eq('receta_id', id);
 
       if (recetaError || ingRecetaError) {
@@ -412,7 +419,6 @@ function mostrarIngredientes(lista = ingredientes) {
           calorias: parseFloat(inputIngCalorias.value),
           proteinas: parseFloat(inputIngProteinas.value),
           precio: parseFloat(inputIngPrecio.value),
-          usuario: usuarioActivo
         })
         .eq('id', id);
 
@@ -487,7 +493,7 @@ function mostrarIngredientes(lista = ingredientes) {
     for (const ing of ingredientesReceta) {
       const { error: insErr } = await supabase.from('ingredientes_receta').insert({
         receta_id: id, ingrediente_id: ing.ingrediente_id,
-        cantidad: ing.cantidad, unidad: ing.unidad, usuario: usuarioActivo
+        cantidad: ing.cantidad, unidad: ing.unidad
       });
       if (insErr) console.error('Error insertando ingrediente:', insErr);
     }
@@ -501,7 +507,7 @@ function mostrarIngredientes(lista = ingredientes) {
       total_precio: totalPrecio,
       total_calorias: totalCalorias,
       total_proteinas: totalProteinas,
-      usuario: usuarioActivo
+  owner_id: uid        // opcional pero coherente con RLS
     }).eq('id', id);
 
     if (updErr) {

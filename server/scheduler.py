@@ -111,7 +111,7 @@ def create_scheduler(app):
 
     # ====== PUSH ======
     def _send_push(user_id: str, title: str, body: str, url_path: str = "/"):
-        base = os.getenv("PUSH_BASE_URL", "http://127.0.0.1:5000").rstrip("/")
+        base = os.getenv("PUSH_BASE_URL", "https://excited-ivy-diazero2-97dc3db2.koyeb.app").rstrip("/")
         try:
             r = requests.post(
                 f"{base}/api/push/send",

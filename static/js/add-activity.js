@@ -495,28 +495,42 @@ cargarSelectsGrupos();
 
   // ---------- Notas (opcional) ----------
   async function actualizarContadorNotas() {
-    const usuarioActual = localStorage.getItem('usuario_actual') || '';
-    const { count, error } = await supabase
-      .from('notas')
-      .select('*', { count: 'exact', head: true })
-      .eq('usuario', usuarioActual);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
 
-    const badge = document.getElementById('contador-notas');
-    if (!error && badge) {
-      badge.style.display = count > 0 ? 'inline-block' : 'none';
-      if (count > 0) badge.textContent = count;
+  const { count, error } = await supabase
+    .from('notas')
+    .select('*', { count: 'exact', head: true })
+    .eq('owner_id', user.id);
+
+  const badge = document.getElementById('contador-notas');
+  if (!error && badge) {
+    badge.style.display = count > 0 ? 'inline-block' : 'none';
+    if (count > 0) badge.textContent = count;
+  }
+}
+
+if (btnNota) {
+  btnNota.addEventListener('click', async () => {
+    const texto = descripcionInput.value.trim();
+    if (!texto) { window.location.href = '/notas'; return; }
+
+    // Obtener UID del usuario autenticado
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { alert("No hay usuario autenticado."); return; }
+    const uid = user.id;
+
+    // Insertar nota con owner_id
+    const { error } = await supabase.from('notas').insert([{ descripcion: texto, owner_id: uid }]);
+    if (!error) {
+      descripcionInput.value = '';
+      actualizarContadorNotas();
     }
-  }
-  if (btnNota) {
-    btnNota.addEventListener('click', async () => {
-      const texto = descripcionInput.value.trim();
-      const usuario = localStorage.getItem('usuario_actual') || '';
-      if (!texto) { window.location.href = '/notas'; return; }
-      const { error } = await supabase.from('notas').insert([{ descripcion: texto, usuario }]);
-      if (!error) { descripcionInput.value=''; actualizarContadorNotas(); }
-    });
-    actualizarContadorNotas();
-  }
+  });
+
+  actualizarContadorNotas();
+}
+
 
   // ---------- Botones tipo ----------
   tipoButtons.forEach(btn => {
@@ -756,9 +770,10 @@ if (tipoSeleccionado === 'Ingrediente') {
 
     // === 3) Insert en la vista public.ingredientes (lo que usas en la app) ===
     const { data: insertedIng, error: insertError } = await supabase
-      .from('ingredientes')
-      .insert([dataToSave])
-      .select('id, description, usuario, precio, cantidad, unidad, calorias, proteinas, supermercado');
+  .from('ingredientes')
+  .insert([dataToSave])
+  .select('id, description, precio, cantidad, unidad, calorias, proteinas, supermercado');
+
 
     console.log('[DEBUG] insert ingredientes ->', { insertedIng, insertError });
     if (insertError) throw insertError;
@@ -830,17 +845,15 @@ dataToSave.grupo_id = document.querySelector('.select-grupo[data-target="cita"]'
 
         const hoyStr = new Date().toISOString().split('T')[0];
         const taskRows = normalizedReqs.map((req, idx) => ({
-            usuario: uid,                     // ← antes era `usuario`
+  owner_id: uid, // antes: usuario: uid
+  description: `[Cita] ${inserted.description} — ${req.text}`,
+  due_date: hoyStr,
+  is_completed: !!req.checked,
+  appointment_id: inserted.id,
+  grupo_id: inserted.grupo_id,
+  requirement_index: idx
+}));
 
-          description: `[Cita] ${inserted.description} — ${req.text}`,
-          due_date: hoyStr,
-          is_completed: !!req.checked,
-          appointment_id: inserted.id,
-          grupo_id: inserted.grupo_id,
-
-          requirement_index: idx
-          
-        }));
         if (taskRows.length > 0) {
           const { error: upErr } = await supabase
             .from('tasks')

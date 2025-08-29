@@ -48,10 +48,11 @@
       if (!uid) return;
 
       const { data, error } = await supabase
-        .from('notas')
-        .select('*')
-        .eq('usuario_id', uid)
-        .order('fecha_creacion', { ascending: false });
+  .from('notas')
+  .select('*')
+  .eq('owner_id', uid)   // ✅ usar owner_id
+  .order('fecha_creacion', { ascending: false });
+
 
       if (error) {
         console.error("Error al obtener las notas:", error);
