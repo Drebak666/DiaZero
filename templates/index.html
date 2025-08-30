@@ -482,6 +482,77 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </script>
 
+<!-- Flecha NAV (inline para saltar caché y subir z-index) -->
+<!-- Flecha NAV (auto ↓/↑ con IntersectionObserver) -->
+<style>
+  .nav-shortcut{
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(16px + env(safe-area-inset-bottom,0));
+    z-index: 99999; /* por encima de todo (shell, mini-player, etc.) */
+  }
+  .nav-shortcut button{
+    width: 46px; height: 46px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.08);
+    background: rgba(17,24,39,.9); color:#e5e7eb;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 6px 20px rgba(0,0,0,.35);
+    backdrop-filter: blur(6px); cursor:pointer;
+    transition: background .2s;
+  }
+  .nav-shortcut button:hover{ background: rgba(51,65,85,.95); }
+</style>
+
+<div class="nav-shortcut" aria-label="Ir a la navegación">
+  <button id="nav-toggle-btn" title="Ir a Navegación">
+    <i class="fa-solid fa-angles-down"></i>
+  </button>
+</div>
+
+<script>
+(() => {
+  const btn = document.getElementById('nav-toggle-btn');
+  const nav = document.getElementById('navegacion');
+  if (!btn || !nav) return;
+
+  const DOWN = '<i class="fa-solid fa-angles-down"></i>';
+  const UP   = '<i class="fa-solid fa-angles-up"></i>';
+  const smooth = { behavior: 'smooth', block: 'start' };
+  const noMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let atNav = false; // ¿navegación visible?
+
+  // Observa si #navegacion entra/sale de la vista (40% visible = “estamos en navegación”)
+  const io = new IntersectionObserver((entries) => {
+    const e = entries[0];
+    atNav = e.isIntersecting && e.intersectionRatio >= 0.4;
+    btn.innerHTML = atNav ? UP : DOWN;
+    btn.title     = atNav ? 'Volver arriba' : 'Ir a Navegación';
+  }, { root: null, threshold: [0, .4, .6, 1] });
+
+  io.observe(nav);
+
+  // Click: baja si estás arriba; sube si ya estás en navegación
+  btn.addEventListener('click', () => {
+    if (atNav) {
+      window.scrollTo({ top: 0, behavior: noMotion ? 'auto' : 'smooth' });
+    } else {
+      if (noMotion) nav.scrollIntoView(); else nav.scrollIntoView(smooth);
+    }
+  });
+
+  // Ajuste inicial por si cargas ya cerca de navegación
+  requestAnimationFrame(() => {
+    // Forzamos primera evaluación
+    const rect = nav.getBoundingClientRect();
+    atNav = rect.top < window.innerHeight * 0.6;
+    btn.innerHTML = atNav ? UP : DOWN;
+    btn.title     = atNav ? 'Volver arriba' : 'Ir a Navegación';
+  });
+})();
+</script>
+
 
 
 </body>

@@ -28,6 +28,9 @@ async function getUidActual() {
 }
 
 // ====== Añadir nuevo artículo ======
+// === Helper: UID actual (prefiere sesión; fallback a tabla usuarios por username)
+// (esto ya lo tienes bien)
+
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const texto = inputNombre.value.trim().toLowerCase();
@@ -36,14 +39,16 @@ form.addEventListener('submit', async (e) => {
   const uid = await getUidActual();
   if (!uid) return;
 
-  // inventario conocido del usuario (usamos la TABLA BASE)
+  // 👇 CAMBIO: usa owner_id y acepta description|nombre
   const { data: ingredientes } = await supabase
     .from('ingredientes_base')
-    .select('description, supermercado, precio, cantidad, unidad')
-    .eq('usuario_id', uid);
+    .select('description, nombre')   // cualquiera que exista
+    .eq('owner_id', uid);           // <-- antes ponía usuario_id
 
-  const normalizar = str => str.toLowerCase().trim().replace(/(es|s)$/, '');
-  const existentes = new Set((ingredientes || []).map(i => normalizar(i.description)));
+  const normalizar = str => (str || '').toLowerCase().trim().replace(/(es|s)$/, '');
+  const getDesc = i => (i?.description ?? i?.nombre ?? '');
+  const existentes = new Set((ingredientes || []).map(i => normalizar(getDesc(i))));
+
   const singular = str => str.replace(/(es|s)$/, '');
   const palabras = texto.split(/\s+/);
   const resultado = [];
@@ -54,7 +59,7 @@ form.addEventListener('submit', async (e) => {
     for (let len = 3; len >= 1; len--) {
       const grupo = palabras.slice(i, i + len).join(' ');
       const grupoSinPlural = singular(grupo);
-      if (existentes.has(grupo) || existentes.has(grupoSinPlural)) {
+      if (existentes.has(normalizar(grupo)) || existentes.has(normalizar(grupoSinPlural))) {
         resultado.push(grupo);
         i += len;
         encontrado = true;
@@ -74,7 +79,7 @@ form.addEventListener('submit', async (e) => {
 
   const nombres = [...new Set(resultado.map(s => s.trim()).filter(Boolean))];
   for (const nombre of nombres) {
-await supabase.from('lista_compra').insert([{ nombre, owner_id: uid }]);
+    await supabase.from('lista_compra').insert([{ nombre, owner_id: uid }]);
   }
 
   inputNombre.value = '';
@@ -82,6 +87,7 @@ await supabase.from('lista_compra').insert([{ nombre, owner_id: uid }]);
   await cargarPendientes();
   await actualizarContadorLista();
 });
+
 
 // ====== Cargar lista ======
 async function cargarLista() {

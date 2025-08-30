@@ -10,8 +10,9 @@ const el = {
   play:   document.getElementById('mini-play'),
   next:   document.getElementById('mini-next'),
   title:  document.getElementById('mini-title'),
-  hide:   document.getElementById('mini-hide'),
+  open:   document.getElementById('mini-open'),
 };
+
 
 // Audio invisible (propio del shell)
 let audio = document.getElementById('global-audio');
@@ -131,7 +132,13 @@ el.play?.addEventListener('click', async () => {
   if (audio.paused) await audio.play().catch(()=>{}); else audio.pause();
   setIcon(); persistState();
 });
-el.hide?.addEventListener('click', () => showShell(false));
+el.open?.addEventListener('click', () => {
+  const frame = document.getElementById('app-frame');
+  const url = '/reproductor';   // <-- ojo: sin .html
+  if (frame) frame.src = url;
+  else window.location.href = url;
+});
+
 
 // -------- Audio events ----------
 audio.addEventListener('play',  () => { setIcon(); persistState(); });

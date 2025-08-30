@@ -184,39 +184,58 @@ cargarSelectsGrupos();
   renderSupBadge(supSelect?.value || '');
 
   // ---------- RESOLVER ID DEL INGREDIENTE BASE ----------
-  async function resolveBaseIdByName(nombre) {
-    if (selectedBaseId) return selectedBaseId;
-    const { data, error } = await supabase
-      .from('ingredientes_base')
-      .select('id')
-      .ilike('nombre', nombre)
-      .limit(1);
-    if (!error && data && data.length) {
-      selectedBaseId = data[0].id;
-    }
-    return selectedBaseId;
+async function resolveBaseIdByName(nombre) {
+  if (selectedBaseId) return selectedBaseId;
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
+  const { data, error } = await supabase
+    .from('ingredientes_base')
+    .select('id')
+    .eq('owner_id', uid)
+    .ilike('nombre', nombre)
+    .limit(1);
+  if (!error && data && data.length) {
+    selectedBaseId = data[0].id;
   }
+  return selectedBaseId;
+}
+
 
   // ---------- HISTÓRICO en ingredientes_supermercado ----------
-  async function fetchHistoricoByBaseId(baseId, onlyLatest) {
-    if (!baseId) return { data: [] };
-    const usuario = localStorage.getItem('usuario_actual') || '';
+async function fetchHistoricoByBaseId(baseId, onlyLatest) {
+  if (!baseId) return { data: [] };
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
 
-    let q = supabase
-      .from('ingredientes_supermercado')
-      .select('supermercado, precio, fecha_precio')
-      .eq('ingrediente_id', baseId)
-      .eq('usuario', usuario)
-      .order('fecha_precio', { ascending: false })
-      .limit(onlyLatest ? 1 : 200);
+  // Usamos join embebido a ingredientes_base y filtramos por su owner_id
+  let q = supabase
+    .from('ingredientes_supermercado')
+    .select(`
+      supermercado,
+      precio,
+      fecha_precio,
+      ingredientes_base!inner(owner_id)
+    `)
+    .eq('ingrediente_id', baseId)
+    .eq('ingredientes_base.owner_id', uid)   // ← filtro por dueño vía join
+    .order('fecha_precio', { ascending: false })
+    .limit(onlyLatest ? 1 : 200);
 
-    const { data, error } = await q;
-    if (error) {
-      console.warn('Error cargando histórico:', error.message);
-      return { data: [] };
-    }
-    return { data };
+  const { data, error } = await q;
+  if (error) {
+    console.warn('Error cargando histórico:', error.message);
+    return { data: [] };
   }
+  // devolvemos solo los campos útiles
+  const limpio = data.map(r => ({
+    supermercado: r.supermercado,
+    precio: r.precio,
+    fecha_precio: r.fecha_precio
+  }));
+  return { data: limpio };
+}
+
+
 
   // ---------- Último precio ----------
   let ultimoHint;
@@ -374,9 +393,11 @@ cargarSelectsGrupos();
   async function cargarBaseIngredientes() {
     if (baseCargada) return;
     const { data, error } = await supabase
-      .from('ingredientes_base')
-      .select('id,nombre,description,unidad,cantidad,calorias,proteinas,precio,supermercado')
-      .order('nombre', { ascending: true });
+  .from('ingredientes_base')
+  .select('id,nombre,description,unidad,cantidad,calorias,proteinas,precio,supermercado')
+  .eq('owner_id', (await supabase.auth.getUser()).data.user.id)
+  .order('nombre', { ascending: true });
+
     if (!error && data) {
       baseIngredientes = data.map(x => ({
         id: x.id,
@@ -749,34 +770,50 @@ if (tipoSeleccionado === 'Ingrediente') {
     // Requiere índice único en nombre:
     //   create unique index if not exists ingredientes_base_nombre_key on public.ingredientes_base (nombre);
     const { data: baseRows, error: upsertError } = await supabase
-      .from('ingredientes_base')
-      .upsert([{
-        nombre: descripcion,
-        unidad: unidad,
-        cantidad: cantidad,
-        calorias: calorias,
-        proteinas: proteinas,
-        description: descripcion,        
-        precio: precio,
-        supermercado: supermercado,
-        usuario: uid   // ← opcional
-      }], { onConflict: 'nombre' })
-      .select('id');
+ .from('ingredientes_base')
+.upsert([{
+  nombre: descripcion,
+  unidad,
+  cantidad,
+  calorias,
+  proteinas,
+  description: descripcion,
+  precio,
+  supermercado,
+  owner_id: uid
+}], { onConflict: 'owner_id,nombre' })  // ✅ clave compuesta
+.select('id');
+
+
     if (upsertError) console.warn('Aviso upsert ingredientes_base:', upsertError.message);
 
     const baseId = Array.isArray(baseRows) && baseRows.length ? baseRows[0].id : null;
 
+    // Guarda histórico de precio por supermercado (si hay datos)
+if (baseId && (precio != null || (supermercado && supermercado.trim()))) {
+  await supabase
+    .from('ingredientes_supermercado')
+    .insert([{
+      ingrediente_id: baseId,
+      supermercado: supermercado || null,
+      precio: precio,
+      fecha_precio: new Date().toISOString(),
+    }]);
+}
+
+
    
 
     // === 3) Insert en la vista public.ingredientes (lo que usas en la app) ===
-    const { data: insertedIng, error: insertError } = await supabase
-  .from('ingredientes')
-  .insert([dataToSave])
-  .select('id, description, precio, cantidad, unidad, calorias, proteinas, supermercado');
+  // (Opcional) consultar lo recién guardado desde la tabla base
+const { data: insertedIng } = await supabase
+  .from('ingredientes_base')
+  .select('id, nombre, unidad, cantidad, calorias, proteinas, precio, supermercado')
+  .eq('id', baseId)
+  .maybeSingle();
 
+console.log('[DEBUG] base guardado ->', insertedIng);
 
-    console.log('[DEBUG] insert ingredientes ->', { insertedIng, insertError });
-    if (insertError) throw insertError;
 
     // reset UI
     form.reset();

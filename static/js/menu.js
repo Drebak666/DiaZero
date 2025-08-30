@@ -24,7 +24,10 @@ const { data: recetas, error } = await supabase
       ingrediente_id
     )
   `)
-  .eq("usuario", uid); // ✅ filtras por uid
+  .eq("owner_id", uid); // ✅
+
+
+
 
 
 
@@ -48,7 +51,7 @@ const { data: recetas, error } = await supabase
     .from("ingredientes_base")
 .select('*')
 .in("id", Array.from(todosIds))
-.eq("usuario", uid);
+  .eq("owner_id", uid); // ✅ en vez de 'usuario'
 
   if (errorIng) {
     console.error("Error al cargar ingredientes base:", errorIng);
@@ -79,19 +82,14 @@ option.innerHTML = `${receta.nombre} <span style="color:#7fa6c3; font-size: 0.9e
 } // <--- Esta era la llave mal colocada que cerraba la función antes de tiempo
 
 async function guardarRecetaEnBD(tipo, recetaId, fecha, dia, container) {
-  if (!fecha) {
-    console.error("Fecha no definida");
-    return;
-  }
-const { data: { user } } = await supabase.auth.getUser();
-const uid = user?.id;
-if (!uid) return;
+  if (!fecha) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return;
 
-const { data, error } = await supabase
-  .from("comidas_dia")
-  .select(` ... `)
-  .eq("owner_id", uid); // ✅ filtras por uid
-
+  const { error } = await supabase
+    .from("comidas_dia")
+    .insert([{ tipo, receta_id: recetaId, fecha, dia, owner_id: uid }]); // ✅ aquí va el insert
 
   if (error) {
     console.error("Error al guardar la receta:", error);
@@ -100,6 +98,7 @@ const { data, error } = await supabase
   await cargarMenuGuardado();
 }
 
+
 async function borrarRecetaDeBD(recetaId, tipo, fecha) {
   const { error } = await supabase.from("comidas_dia").delete().match({ receta_id: recetaId, tipo, fecha });
   if (error) console.error("Error al borrar receta:", error);
@@ -107,17 +106,28 @@ async function borrarRecetaDeBD(recetaId, tipo, fecha) {
 
 async function cargarMenuGuardado() {
   console.log("Iniciando cargarMenuGuardado...");
-const { data: { user } } = await supabase.auth.getUser();
-const uid = user?.id;
-if (!uid) {
-  console.error("No hay uid activo");
-  return;
-}
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return;
 
-const { error } = await supabase.from("comidas_dia")
-  .insert([{ tipo, receta_id: recetaId, fecha, dia, owner_id: uid }]); // ✅ guardas uid
-
-
+  // Trae las comidas del usuario + la receta y sus ingredientes
+  const { data, error } = await supabase
+    .from("comidas_dia")
+    .select(`
+      fecha,
+      tipo,
+      receta_id,
+      recetas (
+        id,
+        nombre,
+        ingredientes_receta (
+          ingrediente_id,
+          cantidad
+        )
+      )
+    `)
+    .eq("owner_id", uid)
+    .order("fecha", { ascending: true });
 
   if (error) {
     console.error("Error al cargar el menú guardado:", error);
