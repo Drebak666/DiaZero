@@ -7,33 +7,6 @@
 
 
 
-<script>
-(() => {
-  const orig = window.fetch;
-  window.fetch = async (input, init) => {
-    let url = typeof input === 'string' ? input : (input && input.url) || '';
-
-    if (url.includes('/rest/v1/')) {
-      if (window.UID && /owner_id=eq\.[^&@]+@[^&]+/.test(url)) {
-        url = url.replace(/owner_id=eq\.[^&]+/, `owner_id=eq.${window.UID}`);
-      }
-
-      if (url.includes('.is.null')) {
-        // 🔎 LOG CON PILA para ver archivo y línea que hacen la petición
-        console.warn('is.null detectado → origen abajo ↓\n', url);
-        console.trace('stack');
-
-        // (opcional) quitar el limit conflictivo si viene junto
-        url = url.replace(/[?&]limit=1:1(?=&|$)/, (m) => (m.startsWith('?') ? '?' : ''));
-      }
-    }
-
-    return orig(typeof input === 'string' ? url : new Request(url, input), init);
-  };
-})();
-</script>
-
-
 
 
 
@@ -571,6 +544,451 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.innerHTML = atNav ? UP : DOWN;
     btn.title     = atNav ? 'Volver arriba' : 'Ir a Navegación';
   });
+})();
+</script>
+
+<!-- =========================================================
+     VOZ / MICRO — RECEPTOR ÚNICO (todo en uno)
+     - Inserta por Supabase: notas, tasks, routines, appointments
+     - Defaults:
+         * tarea: hoy + (ahora+1h)
+         * rutina: hoy, start=(ahora+1h), end=start+1h, diaria
+         * cita:   hoy, start=(ahora+1h), end=start+1h
+     - Dedupe: evita repetir comando (<2s) y duplica en BD (SELECT previo)
+     - Soft refresh de la UI + Realtime (si está activado en Supabase)
+   ========================================================= -->
+<script>
+(() => {
+  if (window.__voiceReceiverInstalled) return;
+  window.__voiceReceiverInstalled = true;
+
+  // ---------- CONFIG (IDs a refrescar tras crear) ----------
+  const REFRESH_IDS = [
+    'agenda-container',
+    'ultimas-citas',
+    // 'notas-container',
+    // 'tareas-container',
+  ];
+
+  // ---------- HELPERS ----------
+  const getSB = () => (window.supabase || window.sb || window.supabaseClient);
+
+  // fecha local "YYYY-MM-DD" (sin UTC)
+  const isoDate = (d) => {
+    if (!d) return null;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // "HH:MM" -> "HH:MM:SS"
+  const padSec = t => !t ? null : (/^\d{1,2}:\d{2}$/.test(t) ? (t + ':00') : t);
+
+  // hoy local
+  function todayISO() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  // hora por defecto: ahora +1h (clamp a 23:59 para no cambiar de día)
+  function defaultStartTimePlus1h() {
+    const now = new Date();
+    const plus = new Date(now.getTime() + 60 * 60000);
+    let hh = plus.getHours();
+    let mm = plus.getMinutes();
+    if (plus.getDate() !== now.getDate()) { hh = 23; mm = 59; }
+    return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00`;
+  }
+
+  // suma +1h a "HH:MM[:SS]" (clamp 23:59:00)
+  function add1hClamp(t) {
+    if (!t) return null;
+    const [hh, mm, ss='00'] = t.split(':').map(x => parseInt(x,10));
+    let h2 = hh + 1, m2 = mm, s2 = ss || 0;
+    if (h2 >= 24) { h2 = 23; m2 = 59; s2 = 0; }
+    return `${String(h2).padStart(2,'0')}:${String(m2).padStart(2,'0')}:${String(s2).padStart(2,'0')}`;
+  }
+
+    // ===== Lista de la compra: helpers =====
+  // Cacheamos el set de ingredientes para no pedirlo cada vez
+  let __ING_SET = null;
+  async function getIngredientSet(){
+    if (__ING_SET) return __ING_SET;
+    const sb = getSB();
+    __ING_SET = new Set();
+    if (!sb?.from) return __ING_SET;
+
+    // intenta distintas tablas conocidas; la primera que responda
+    const candidates = [
+      { table: 'ingredientes_base', col: 'nombre' },
+      { table: 'ingredientes',      col: 'nombre' },
+      { table: 'ingredientes_lista',col: 'nombre' },
+    ];
+    for (const {table,col} of candidates){
+      const { data, error } = await sb.from(table).select(col).limit(2000);
+      if (!error && Array.isArray(data)) {
+        data.forEach(r => r?.[col] && __ING_SET.add(String(r[col]).toLowerCase().trim()));
+        if (__ING_SET.size) break;
+      }
+    }
+    return __ING_SET;
+  }
+
+  // Normaliza texto
+  const nrm = s => (s||'').toLowerCase().replace(/\s+/g,' ').trim();
+
+  // Extrae cantidad/unidad si viene pegado al ítem
+  function pickQtyUnit(str){
+    const x = nrm(str);
+    const m = x.match(/(?:^|\s)(\d+(?:[.,]\d+)?)\s*(kg|g|gr|gramos|l|ml|cc|ud|uds|unidad(?:es)?|paquete(?:s)?|lata(?:s)?|bote(?:s)?|pieza(?:s)?)(?:\s|$)/);
+    if (!m) return { nombre: str.trim(), cantidad:null, unidad:null };
+    let cantidad = parseFloat(m[1].replace(',','.'));
+    const u0 = m[2];
+    const unidad = ({
+      kg:'kg', g:'g', gr:'g', gramos:'g',
+      l:'l', ml:'ml', cc:'ml',
+      ud:'ud', uds:'ud', unidad:'ud', unidades:'ud',
+      paquete:'paquete', paquetes:'paquete',
+      lata:'lata', latas:'lata',
+      bote:'bote', botes:'bote',
+      pieza:'pieza', piezas:'pieza'
+    })[u0] || u0;
+
+    const nombre = x.replace(m[0],' ').replace(/\s{2,}/g,' ').trim();
+    return { nombre, cantidad, unidad };
+  }
+
+  // Partir en items con reglas:
+  // 1) Si hay comas o " y " / " e " → usar eso como separador
+  // 2) Si no, troceo por tokens con nexos (de/del/con/sin) y buscando ingredientes compuestos conocidos
+  async function splitShoppingText(text){
+    const ING = await getIngredientSet();
+    let s = ' ' + nrm(text) + ' ';
+
+    // Prioriza separadores explícitos
+    const hasSep = /,|;|\sy\s|\se\s/.test(s);
+    if (hasSep){
+      s = s.replace(/\s+y\s+|\s+e\s+/g, ',');
+      return s.split(',').map(t=>t.trim()).filter(Boolean);
+    }
+
+    // Sin separadores: greedy por ingredientes + nexos
+    const tokens = s.trim().split(/\s+/);
+    const items = [];
+    const NEXOS = new Set(['de','del','con','sin']);
+    for (let i=0; i<tokens.length; ){
+      // buscar el ingrediente más largo empezando en i (hasta 5 tokens)
+      let best = null, bestLen = 0;
+      for (let len = Math.min(5, tokens.length - i); len >= 2; len--){
+        const cand = tokens.slice(i, i+len).join(' ');
+        if (ING.has(cand)) { best = cand; bestLen = len; break; }
+      }
+      if (best){
+        items.push(best);
+        i += bestLen;
+        continue;
+      }
+      // une patron "X de Y" / "X del Y" / "X con Y" / "X sin Y"
+      if (i+2 < tokens.length && NEXOS.has(tokens[i+1])){
+        items.push(tokens[i] + ' ' + tokens[i+1] + ' ' + tokens[i+2]);
+        i += 3;
+        continue;
+      }
+      // por defecto: palabra suelta
+      items.push(tokens[i]);
+      i++;
+    }
+
+    // juntar restos tipo "400 g" que hayan quedado en item siguiente
+    // (lo arregla pickQtyUnit de todas formas, pero ayuda)
+    return items.map(t=>t.trim()).filter(Boolean);
+  }
+
+  // soft refresh de secciones sin F5
+async function refreshUIAfterChange(type, row) {
+  // Evita bucles de recarga
+  if (window.__voiceSoftReloading) return;
+  let didSomething = false;
+
+  try {
+    // Llama a cualquier helper que tengas (pon aquí los tuyos reales)
+    if (typeof window.recargarNotas === 'function') {
+      await window.recargarNotas(); didSomething = true;
+    }
+    if (typeof window.cargarAgenda === 'function') {
+      await window.cargarAgenda(); didSomething = true;
+    }
+    if (typeof window.cargarDia === 'function') {
+      // intenta refrescar el día afectado si viene en el row
+      const d = row?.due_date || row?.date || null;
+      await window.cargarDia?.(d); didSomething = true;
+    }
+    if (typeof window.cargarUltimasCitas === 'function') {
+      await window.cargarUltimasCitas(); didSomething = true;
+    }
+
+    // Evento por si otra parte de tu app escucha
+    document.dispatchEvent(new CustomEvent('voice:db-change', {
+      detail: { type, row }
+    }));
+  } catch (e) {
+    console.warn('[voice] refresh helpers error:', e);
+  }
+
+  // Si no hubo ningún helper, fuerza una recarga 1 sola vez
+  if (!didSomething) {
+    window.__voiceSoftReloading = true;
+    setTimeout(() => { location.reload(); }, 100); // “auto-F5”
+  }
+}
+  // inserta si no existe ya (dedupe en BD)
+  async function insertIfNotExists({ table, match, build }) {
+    const sb = getSB();
+    if (!sb?.from) throw new Error('Supabase no inicializado');
+
+    // owner_id (si usas RLS)
+    let owner_id = null;
+    try { owner_id = (await sb.auth.getUser())?.data?.user?.id || null; } catch {}
+
+    const row = build(owner_id);
+
+    let q = sb.from(table).select('id').limit(1);
+    for (const [k,v] of Object.entries(match(row))) {
+      q = (v === null) ? q.is(k, null) : q.eq(k, v);
+    }
+    const { data: dup, error: selErr } = await q;
+    if (selErr) throw selErr;
+    if (dup && dup.length) {
+      console.warn(`⛔ [voice] Duplicado en ${table}, no inserto`, match(row));
+      return { skipped: true };
+    }
+
+    const { error: insErr } = await sb.from(table).insert([ row ]);
+    if (insErr) throw insErr;
+    return { ok: true, row };
+  }
+
+  // ---------- CREAR ENTIDAD ----------
+  // dedupe de comando (<2s)
+  let lastSig = null, lastTs = 0;
+  const sameSig = (a,b) => a && b && a.type===b.type && a.text===b.text && a.date===b.date && a.time===b.time;
+
+  async function crearEntidad(intent){
+    const { type, text, date, time } = intent;
+    if (!text) throw new Error('Sin texto');
+
+    // Si tu app ya tiene helpers, se respetan
+    if (type==='nota'  && typeof window.addNota  === 'function')  return window.addNota({ descripcion:text });
+    if (type==='tarea' && typeof window.addTarea === 'function')  return window.addTarea({ description:text, due_date: isoDate(date)||todayISO(), start_time: padSec(time)||defaultStartTimePlus1h() });
+    if (type==='rutina'&& typeof window.addRutina=== 'function')  return window.addRutina({ description:text, date: isoDate(date)||todayISO(), start_time: padSec(time)||defaultStartTimePlus1h(), end_time: add1hClamp(padSec(time)||defaultStartTimePlus1h()) });
+    if (type==='cita'  && typeof window.addCita  === 'function')  return window.addCita({ descripcion:text, fecha: isoDate(date)||todayISO(), hora: padSec(time)||defaultStartTimePlus1h() });
+
+       // COMPRA -> 'lista_compra' (inserción en lote con dedupe)
+if (type === 'compra') {
+  const sb = getSB();
+  if (!sb?.from) throw new Error('Supabase no inicializado');
+
+  // 1) Partimos el texto en items (respeta "de/del/con/sin" y “arena de gato”)
+  const items = await splitShoppingText(text);
+  if (!items.length) return;
+
+  // 2) Normalizamos cantidad/unidad de cada item
+  const rows = [];
+  for (const raw of items) {
+    const { nombre, cantidad, unidad } = pickQtyUnit(raw);
+    if (!nombre) continue;
+    rows.push({ nombre, cantidad: cantidad ?? null, unidad: unidad ?? null });
+  }
+  if (!rows.length) return;
+
+  // 3) Obtenemos usuario y lo añadimos a todos los rows
+  let owner_id = null;
+  try { owner_id = (await sb.auth.getUser())?.data?.user?.id || null; } catch {}
+rows.forEach(r => { r.owner_id = owner_id; r.completado = false; });
+
+  // 4) Dedupe local: quitamos duplicados del mismo comando
+  const seen = new Set();
+  const uniqueRows = rows.filter(r => {
+    const k = `${r.nombre.toLowerCase().trim()}|${r.unidad || ''}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  // 5) Dedupe contra la BD (pendientes del usuario)
+  const { data: actuales, error: selErr } = await sb
+ .from('lista_compra')
+ .select('nombre, unidad')
+ .eq('owner_id', owner_id)
+ .eq('completado', false);
+
+  const ya = new Set((actuales || []).map(i => `${(i.nombre||'').toLowerCase().trim()}|${i.unidad||''}`));
+  const aInsertar = uniqueRows.filter(r => !ya.has(`${r.nombre.toLowerCase().trim()}|${r.unidad||''}`));
+
+  if (!aInsertar.length) { console.log('🛒 [voice] Nada que insertar (todo ya estaba)'); return; }
+
+  // 6) Inserción en lote (una sola llamada)
+  const { error: insErr } = await sb.from('lista_compra').insert(aInsertar);
+  if (insErr) throw insErr;
+
+  // 7) Refresco suave de UI
+  window.updateShoppingBadge?.();
+  for (const row of aInsertar) {
+    refreshUIAfterChange('compra', row);
+  }
+  return;
+}
+
+    // NOTA -> 'notas'
+    if (type === 'nota') {
+      const r = await insertIfNotExists({
+        table: 'notas',
+        build: (owner_id) => ({ descripcion: text, owner_id }),
+        match: (row) => ({ descripcion: row.descripcion, owner_id: row.owner_id })
+      });
+      if (r?.ok) refreshUIAfterChange('nota', r.row);
+      return;
+    }
+
+    // TAREA -> 'tasks' (hoy +1h por defecto)
+    if (type === 'tarea') {
+      const d = isoDate(date) || todayISO();
+      const t = padSec(time) || defaultStartTimePlus1h();
+      const r = await insertIfNotExists({
+        table: 'tasks',
+        build: (owner_id) => ({
+          description: text,
+          due_date: d,
+          start_time: t,
+          end_time: null,
+          is_completed: false,
+          owner_id
+        }),
+        match: (row) => ({
+          description: row.description,
+          due_date: row.due_date,
+          start_time: row.start_time || null,
+          owner_id: row.owner_id
+        })
+      });
+      if (r?.ok) refreshUIAfterChange('tarea', { ...r.row, due_date:d, start_time:t, description:text });
+      return;
+    }
+
+    // RUTINA -> 'routines' (hoy, start +1h, fin +1h, diario)
+    if (type === 'rutina') {
+      const d = isoDate(date) || todayISO();
+      const start = padSec(time) || defaultStartTimePlus1h();
+      const end   = add1hClamp(start);
+      const r = await insertIfNotExists({
+        table: 'routines', // cambia a 'rutinas' si tu tabla se llama así
+        build: (owner_id) => ({
+          description: text,
+          date: d,
+          start_time: start,
+          end_time: end,
+          days_of_week: ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"],
+          is_active: true,
+          is_completed: false,
+          owner_id
+        }),
+        match: (row) => ({
+          description: row.description,
+          date: row.date,
+          start_time: row.start_time,
+          owner_id: row.owner_id
+        })
+      });
+      if (r?.ok) refreshUIAfterChange('rutina', { ...r.row, date:d, start_time:start, end_time:end, description:text });
+      return;
+    }
+
+    // CITA -> 'appointments' (hoy, start +1h, fin +1h)
+    if (type === 'cita') {
+      const d = isoDate(date) || todayISO();
+      const start = padSec(time) || defaultStartTimePlus1h();
+      const end   = add1hClamp(start);
+      const r = await insertIfNotExists({
+        table: 'appointments',
+        build: (owner_id) => ({
+          description: text,
+          date: d,
+          start_time: start,
+          end_time: end,
+          owner_id
+        }),
+        match: (row) => ({
+          description: row.description,
+          date: row.date,
+          start_time: row.start_time,
+          owner_id: row.owner_id
+        })
+      });
+      if (r?.ok) refreshUIAfterChange('cita', { ...r.row, date:d, start_time:start, end_time:end, description:text });
+      return;
+    }
+
+    throw new Error('Tipo no soportado: ' + type);
+  }
+
+  // ---------- Receptor desde el SHELL ----------
+  window.addEventListener('message', async (event) => {
+    const msg = event.data || {};
+    if (msg.action !== 'voice-create') return;
+
+    const { type, text, date, time } = msg.payload || {};
+    if (!type || !text) return;
+
+    const sig = { type, text, date: date||null, time: time||null };
+    const now = Date.now();
+    if (lastSig && sameSig(sig, lastSig) && (now - lastTs) < 2000) {
+      console.warn('⛔ Ignorado duplicado reciente', sig);
+      return;
+    }
+    lastSig = sig; lastTs = now;
+
+    try {
+      await crearEntidad({
+        type,
+        text,
+        date: date ? new Date(date) : null,
+        time: time || null
+      });
+    } catch (e) {
+      console.error('❌ [voice] Error creando:', e);
+      alert('No se pudo crear: ' + (e?.message || e));
+    }
+  });
+
+  // ---------- Realtime (opcional pero útil) ----------
+  (async () => {
+    const sb = getSB();
+    if (!sb?.channel) return;
+
+    let uid = null;
+    try { uid = (await sb.auth.getUser())?.data?.user?.id || null; } catch {}
+
+    const refresh = (type, payload) => {
+      const row = payload.new || payload.old || {};
+      refreshUIAfterChange(type, row);
+    };
+
+    const ch = sb.channel('rt-voice')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notas',         filter: uid ? `owner_id=eq.${uid}` : undefined }, (p) => refresh('nota', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks',         filter: uid ? `owner_id=eq.${uid}` : undefined }, (p) => refresh('tarea', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'routines',      filter: uid ? `owner_id=eq.${uid}` : undefined }, (p) => refresh('rutina', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments',  filter: uid ? `owner_id=eq.${uid}` : undefined }, (p) => refresh('cita', p))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'lista_compra', filter: uid ? `owner_id=eq.${uid}` : undefined }, (p) => refresh('compra', p))
+
+      .subscribe();
+
+    window.addEventListener('beforeunload', () => { try { sb.removeChannel(ch); } catch {} });
+  })();
+
 })();
 </script>
 

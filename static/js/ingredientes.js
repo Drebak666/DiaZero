@@ -60,27 +60,53 @@ document.getElementById('cancelar-ingrediente').addEventListener('click', (e) =>
 
 async function cargarIngredientes() {
   const { data: { user } } = await supabase.auth.getUser();
-const usuarioId = user?.id;
-if (!usuarioId) return;
+  const usuarioId = user?.id;
+  if (!usuarioId) return;
 
-const { data, error } = await supabase
-  .from('ingredientes')
-  .select('*')
-.eq('owner_id', usuarioId)
-  .order('fecha_creacion', { ascending: false });
+  let data = null, error = null;
 
+  // 1º intento: ingredientes_base con created_at
+  try {
+    const res = await supabase
+      .from('ingredientes_base')
+      .select('id, nombre, cantidad, unidad, created_at, owner_id')
+      .eq('owner_id', usuarioId)
+      .order('created_at', { ascending: false });
+    data = res.data; error = res.error;
+  } catch (e) {}
+
+  // 2º intento (por si tu columna temporal se llama fecha_creacion)
+  if (error) {
+    try {
+      const res2 = await supabase
+        .from('ingredientes_base')
+        .select('id, nombre, cantidad, unidad, fecha_creacion, owner_id')
+        .eq('owner_id', usuarioId)
+        .order('fecha_creacion', { ascending: false });
+      data = res2.data; error = res2.error;
+    } catch (e) {}
+  }
+
+  // 3º fallback: sin ordenar si ambas columnas no existen
+  if (error) {
+    const res3 = await supabase
+      .from('ingredientes_base')
+      .select('id, nombre, cantidad, unidad, owner_id')
+      .eq('owner_id', usuarioId);
+    data = res3.data; error = res3.error;
+  }
 
   if (error) {
-    console.error('Error al cargar ingredientes:', error);
+    console.error('Error al cargar ingredientes (ingredientes_base):', error);
     return;
   }
 
   const contenedor = document.getElementById('lista-ingredientes');
   contenedor.innerHTML = '';
 
-  data.forEach((ing) => {
+  (data || []).forEach((ing) => {
     const item = document.createElement('div');
-    item.textContent = `${ing.nombre} – ${ing.cantidad} ${ing.unidad}`;
+    item.textContent = `${ing.nombre} – ${ing.cantidad ?? ''} ${ing.unidad ?? ''}`.trim();
     contenedor.appendChild(item);
   });
 }

@@ -1,5 +1,11 @@
 import { supabase } from './supabaseClient.js';
 
+// Espera a que Supabase restaure la sesión (parpadeo inicial de algunos navegadores)
+async function ensureSessionReady() {
+  try { await supabase.auth.getSession(); } catch {}
+  await new Promise(r => setTimeout(r, 50));
+}
+
 /**
  * Planificador diario de mejoras
  * - No duplica porque usa onConflict (improvement_id, due_date, owner_id)
@@ -12,6 +18,8 @@ export async function planificarMejorasHoy({
   maxTareas = 4,
   cuotasPorCategoria = null
 } = {}) {
+  await ensureSessionReady();
+
   const { data: { user } } = await supabase.auth.getUser();
   const uid = user?.id || null;
   if (!uid) return { planned: 0, reason: 'no_user' };
@@ -24,7 +32,7 @@ export async function planificarMejorasHoy({
     .select('id')
     .eq('owner_id', uid)
     .eq('due_date', hoyStr)
-    .not('improvement_id', 'is', null);     // NO usar .is(null) → evita ...is.null
+    .not('improvement_id', 'is', null); // evita ...is.null
 
   if (!errYaHay && Array.isArray(yaHay) && yaHay.length > 0) {
     return { planned: 0, reason: 'already_planned_today' };

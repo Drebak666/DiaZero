@@ -1,16 +1,19 @@
-
-
-
-
 // static/js/main.js
 import { supabase } from './supabaseClient.js';
 
+// Espera a que Supabase restaure la sesión (evita “Failed to fetch” y datos vacíos en primera carga)
+async function ensureSessionReady() {
+  try { await supabase.auth.getSession(); } catch {}
+  await new Promise(r => setTimeout(r, 50));
+}
 
-// cuando tengas la sesión/usuario
-const { data: { user } } = await supabase.auth.getUser();
-const uid = user?.id;
-window.UID = uid; // <-- añade esto (queda global)
-
+// ==== UID global, pero tras asegurar sesión ====
+await ensureSessionReady();
+{
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id || null;
+  window.UID = uid;
+}
 
 import { enablePush, sendTest as sendTestPush, unsubscribe as unsubscribePush } from '/static/js/push.js';
 window.enablePush = enablePush;
@@ -18,25 +21,22 @@ window.sendTestPush = sendTestPush;
 window.unsubscribePush = unsubscribePush;
 console.log('push attach:', typeof window.enablePush); // debe decir "function"
 
-
-
 document.addEventListener('DOMContentLoaded', async () => {
   // 1) sesión
+  await ensureSessionReady();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) { window.location.href = '/login'; return; }
-
 
   // 2) preparar despensa (rellena cantidad_total si está a null)
   await rellenarCantidadTotalEnDespensa();
 
   // 3) genera/actualiza lista de compra
   await verificarDespensaYActualizar();
-  await actualizarContadorLista();
-
+await updateShoppingBadge();
   // 4) cuando cambie la despensa (al completar una comida, etc.)
   window.addEventListener('despensa-cambiada', async () => {
     await verificarDespensaYActualizar();
-    await actualizarContadorLista();
+await updateShoppingBadge();
   });
 
   // ===== UI de usuario (igual que tenías) =====
@@ -90,26 +90,53 @@ document.addEventListener('DOMContentLoaded', async () => {
 // =   FUNCIONES GORDAS    =
 // =========================
 
-async function actualizarContadorLista() {
-  const { data: { user } } = await supabase.auth.getUser();
-  const uid = user?.id;
-  if (!uid) return;
+// ✅ contador unificado (usa count exacto y cuenta false o NULL)
+// 🔧 Pega SOLO estos cambios mínimos
 
-  const { data: items, error } = await supabase
+// 1) main.js → reemplaza updateShoppingBadge() por esto
+async function updateShoppingBadge() {
+  const { data:{ user } } = await supabase.auth.getUser();
+  const uid = user?.id; if (!uid) return;
+
+  const { count } = await supabase
     .from('lista_compra')
-    .select('id')
+    .select('id', { count: 'exact', head: true })
     .eq('owner_id', uid)
-    .eq('completado', false);
+    .or('completado.eq.false,completado.is.null');
 
-  if (error) console.error('[contador lista]', error.message, error.details, error.hint);
+  const total = count || 0;
+  document.querySelectorAll('#contador-lista, .contador-lista').forEach(el => {
+    el.textContent = total;
+    el.style.display = total > 0 ? 'inline-block' : 'none';
+  });
+}
+window.updateShoppingBadge = updateShoppingBadge;
 
-  const total = items?.length || 0;
-  const badge = document.getElementById('contador-lista');
-  if (badge) {
-    badge.textContent = total;
-    badge.style.display = total > 0 ? 'inline-block' : 'none';
+document.addEventListener('DOMContentLoaded', () => {
+  updateShoppingBadge();
+});
+
+
+
+
+// 2) index.html → en la rama VOZ type==='compra'
+// Sustituye el bloque donde calculas owner_id por este (antes de insertar)
+let owner_id = null;
+try { owner_id = (await sb.auth.getUser())?.data?.user?.id || null; } catch {}
+if (!owner_id) {
+  const username = localStorage.getItem('usuario_actual');
+  if (username) {
+    const { data: u } = await sb.from('usuarios').select('id').eq('username', username).maybeSingle();
+    owner_id = u?.id || null;
   }
 }
+rows.forEach(r => { r.owner_id = owner_id; r.completado = false; });
+
+// (y tras insertar) añade
+window.updateShoppingBadge?.();
+
+
+
 
 
 async function verificarDespensaYActualizar() {
@@ -145,7 +172,7 @@ async function verificarDespensaYActualizar() {
     if (ratio < 0.15 && !yaEnLista.has(nombre.toLowerCase())) {
       await supabase.from('lista_compra').insert({
         nombre,
-        owner_id: uid,          // <<<<<<
+        owner_id: uid,
         cantidad: d.cantidad_total ?? null,
         unidad: d.unidad ?? null,
         completado: false
@@ -162,7 +189,7 @@ async function verificarDespensaYActualizar() {
     .from('comidas_dia')
     .select('receta_id, personas')
     .eq('fecha', hoy)
-    .eq('owner_id', uid);       // <<<<<<
+    .eq('owner_id', uid);
   if (errComidas || !comidasDia?.length) return añadidos;
 
   const recetaIds = [...new Set(comidasDia.map(c => c.receta_id))];
@@ -178,12 +205,12 @@ async function verificarDespensaYActualizar() {
 
   const ingIds = [...new Set(ingRecetas.map(i => i.ingrediente_id))];
 
-  // ingredientes_base del usuario (si usas multiusuario en esta tabla)
+  // ingredientes_base del usuario; si vacío, fallback sin filtro
   let { data: ingBase } = await supabase
     .from('ingredientes_base')
     .select('id, description, nombre, unidad, cantidad')
     .in('id', ingIds)
-    .eq('owner_id', uid);       // <<<<<<
+    .eq('owner_id', uid);
   if (!ingBase || !ingBase.length) {
     const alt = await supabase
       .from('ingredientes_base')
@@ -222,7 +249,7 @@ async function verificarDespensaYActualizar() {
     .from('despensa')
     .select('id, nombre, cantidad, unidad, cantidad_total')
     .in('nombre', nombresUnicos)
-    .eq('owner_id', uid);       // <<<<<<
+    .eq('owner_id', uid);
 
   const disponibles = new Map();
   for (const d of (despensaRows || [])) {
@@ -265,7 +292,7 @@ async function verificarDespensaYActualizar() {
 
     await supabase.from('lista_compra').insert({
       nombre,
-      owner_id: uid,        // <<<<<<
+      owner_id: uid,
       unidad:  uniBase,
       cantidad: cantidadFinal,
       completado: false
@@ -285,9 +312,9 @@ async function rellenarCantidadTotalEnDespensa() {
 
   const { data: despensa, error } = await supabase
     .from('despensa')
-     .select('id, nombre')
- .or('cantidad_total.is.null')
- .eq('owner_id', uid);
+    .select('id, nombre')
+    .or('cantidad_total.is.null')
+    .eq('owner_id', uid);
 
   if (error || !despensa?.length) return;
 
@@ -297,7 +324,7 @@ async function rellenarCantidadTotalEnDespensa() {
       .from('ingredientes_base')
       .select('cantidad, unidad')
       .eq('nombre', nombre)
-      .eq('owner_id', uid)  // << y este, por coherencia
+      .eq('owner_id', uid)  // coherencia multicuenta
       .maybeSingle();
 
     if (!base) continue;
@@ -306,6 +333,6 @@ async function rellenarCantidadTotalEnDespensa() {
       .from('despensa')
       .update({ cantidad_total: base.cantidad })
       .eq('id', id)
-      .eq('owner_id', uid); // << por seguridad
+      .eq('owner_id', uid);
   }
 }

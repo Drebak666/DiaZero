@@ -3,7 +3,14 @@ import { supabase } from './supabaseClient.js';
 import { calcularTotalesReceta } from '../utils/calculos_ingredientes.js';
 import { getUsuarioActivo } from './usuario.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+// --- helper: espera a que supabase restaure la sesión (evita "Failed to fetch")
+async function ensureSessionReady() {
+  try { await supabase.auth.getSession(); } catch {}
+  await new Promise(r => setTimeout(r, 50));
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await ensureSessionReady(); // 👈 muy importante
   const contenedor = document.getElementById('comida-container');
   if (!contenedor) return;
 
@@ -37,10 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!modal) return;
 
-    // Cerrar modal
     btnCancel?.addEventListener('click', () => modal.classList.add('oculto'));
 
-    // Quitar todo -> borra todos los compartidos de esa comida
     btnClear?.addEventListener('click', async () => {
       const comidaId = document.getElementById('share-id').value;
       if (!comidaId) return;
@@ -49,46 +54,40 @@ document.addEventListener('DOMContentLoaded', () => {
         .delete()
         .eq('comida_id', comidaId);
       if (error) {
-        alert('❌ No se pudo limpiar');
+        console.error(error);
         return;
       }
       document.getElementById('share-grupo').value = '';
       document.getElementById('share-personas').innerHTML = '';
-      alert('🧹 Compartido eliminado');
     });
 
-    // Guardar -> sincroniza (altas/bajas) con upsert
     form?.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const comidaId = document.getElementById('share-id').value;
       const grupoId  = document.getElementById('share-grupo').value || null;
 
-      // selección actual
       const seleccionados = Array.from(
         document.querySelectorAll('#share-personas input[name="share-miembro"]:checked')
       ).map(ch => ch.value);
 
-      // estado actual
       const { data: actuales, error: errAct } = await supabase
         .from('comidas_compartidas')
         .select('miembro_id')
         .eq('comida_id', comidaId);
 
       if (errAct) {
-        alert('❌ Error leyendo compartidos');
+        console.error(errAct);
         return;
       }
 
       const setActual = new Set((actuales || []).map(r => r.miembro_id));
       const setNuevo  = new Set(seleccionados);
 
-      // Altas
       const aInsertar = [...setNuevo]
         .filter(id => !setActual.has(id))
         .map(id => ({ comida_id: comidaId, grupo_id: grupoId, miembro_id: id }));
 
-      // Bajas
       const aBorrar = [...setActual].filter(id => !setNuevo.has(id));
 
       if (aInsertar.length) {
@@ -97,7 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
           .upsert(aInsertar, { onConflict: 'comida_id,miembro_id' });
         if (error) {
           console.error(error);
-          alert('❌ Error insertando compartidos');
           return;
         }
       }
@@ -110,40 +108,37 @@ document.addEventListener('DOMContentLoaded', () => {
           .in('miembro_id', aBorrar);
         if (error) {
           console.error(error);
-          alert('❌ Error eliminando compartidos');
           return;
         }
       }
 
-      alert('✅ Compartido actualizado');
       document.getElementById('modal-compartir').classList.add('oculto');
     });
   }
   initShareModalHandlers();
   // =============================================================
 
-async function cargarComidaDelDia() {
-  const hoy = new Date().toISOString().split('T')[0];
-  const usuario = getUsuarioActivo();
+  async function cargarComidaDelDia() {
+    await ensureSessionReady(); // 👈 asegura sesión antes de cada tanda de lecturas
 
-  // === UID del usuario activo ===
-  let usuarioId = null;
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user?.id) usuarioId = user.id;
-  } catch (_) {}
-  if (!usuarioId) {
-    const { data: uRow } = await supabase
-      .from('usuarios')
-      .select('id')
-      .eq('username', usuario)
-      .maybeSingle();
-    if (uRow?.id) usuarioId = uRow.id;
-  }
+    const hoy = new Date().toISOString().split('T')[0];
+    const usuario = getUsuarioActivo();
 
-  // 👉 Logs de depuración
-  console.log('uid activo:', usuarioId);
-
+    // === UID del usuario activo ===
+    let usuarioId = null;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) usuarioId = user.id;
+    } catch (_) {}
+    if (!usuarioId) {
+      const { data: uRow } = await supabase
+        .from('usuarios')
+        .select('id')
+        .eq('username', usuario)
+        .maybeSingle();
+      if (uRow?.id) usuarioId = uRow.id;
+    }
+    console.log('uid activo:', usuarioId);
 
     // ----- UI: header de tipo -----
     contenedor.innerHTML = '';
@@ -165,12 +160,12 @@ async function cargarComidaDelDia() {
         id, is_completed, tipo, receta_id, personas,
         recetas (
           nombre,
-  ingredientes_receta!fk_ir_receta ( cantidad, unidad, ingrediente_id )
+          ingredientes_receta!fk_ir_receta ( cantidad, unidad, ingrediente_id )
         )
       `)
       .eq('fecha', hoy)
       .eq('tipo', tipoActual)
-      .eq('owner_id', usuarioId); 
+      .eq('owner_id', usuarioId);
 
     // ----- 2) Comidas compartidas conmigo (por UID) -----
     let shared = { data: [], error: null };
@@ -180,33 +175,32 @@ async function cargarComidaDelDia() {
         .select('id')
         .eq('usuario_id', usuarioId);
       const miembroIds = (mg.data || []).map(r => r.id);
-console.log('miembroIds:', miembroIds);
+      console.log('miembroIds:', miembroIds);
 
-if (miembroIds.length) {
-  const comp = await supabase
-    .from('comidas_compartidas')
-    .select('comida_id')
-    .in('miembro_id', miembroIds);
+      if (miembroIds.length) {
+        const comp = await supabase
+          .from('comidas_compartidas')
+          .select('comida_id')
+          .in('miembro_id', miembroIds);
 
-  const comidaIds = [...new Set((comp.data || []).map(r => r.comida_id))];
-  console.log('comidaIds compartidas:', comidaIds);
+        const comidaIds = [...new Set((comp.data || []).map(r => r.comida_id))];
+        console.log('comidaIds compartidas:', comidaIds);
 
-  if (comidaIds.length) {
-    shared = await supabase
-      .from('comidas_dia')
-      .select(`
-        id, is_completed, tipo, receta_id, personas,
-        recetas (
-          nombre,
-          ingredientes_receta ( cantidad, unidad, ingrediente_id )
-        )
-      `)
-      .in('id', comidaIds)
-      .eq('fecha', hoy)
-      .eq('tipo', tipoActual);
-  }
-}
-
+        if (comidaIds.length) {
+          shared = await supabase
+            .from('comidas_dia')
+            .select(`
+              id, is_completed, tipo, receta_id, personas,
+              recetas (
+                nombre,
+                ingredientes_receta ( cantidad, unidad, ingrediente_id )
+              )
+            `)
+            .in('id', comidaIds)
+            .eq('fecha', hoy)
+            .eq('tipo', tipoActual);
+        }
+      }
     }
 
     if (own.error)   console.error('Error comidas propias:', own.error.message);
@@ -233,15 +227,13 @@ if (miembroIds.length) {
       const ingredientesMap = new Map();
       if (idsIngredientes.length > 0) {
         let { data: ingData } = await supabase
-  .from('ingredientes_base')
-  .select('id, description, precio, cantidad, calorias, proteinas, unidad')
-  .in('id', idsIngredientes)
-  .eq('owner_id', usuarioId);
-  
+          .from('ingredientes_base')
+          .select('id, description, precio, cantidad, calorias, proteinas, unidad')
+          .in('id', idsIngredientes)
+          .eq('owner_id', usuarioId);
 
-
-if (!ingData || ingData.length === 0) {
-
+        // fallback sin owner si no hay nada
+        if (!ingData || ingData.length === 0) {
           const alt = await supabase
             .from('ingredientes_base')
             .select('id, description, precio, cantidad, calorias, proteinas, unidad')
@@ -278,9 +270,10 @@ if (!ingData || ingData.length === 0) {
       personasInput.style.width = '58px';
       personasInput.onchange = async () => {
         const val = Math.max(1, parseInt(personasInput.value) || 1);
-await supabase.from('comidas_dia').update({ personas: val })
-   .eq('id', comida.id)
-   .eq('owner_id', usuarioId);        cargarComidaDelDia();
+        await supabase.from('comidas_dia').update({ personas: val })
+          .eq('id', comida.id)
+          .eq('owner_id', usuarioId);
+        cargarComidaDelDia();
       };
 
       const shareBtn = document.createElement('button');
@@ -290,12 +283,11 @@ await supabase.from('comidas_dia').update({ personas: val })
       shareBtn.dataset.id = comida.id;
       shareBtn.innerHTML = '<i class="fas fa-share-nodes"></i>';
 
-      // Abrir modal + cargar grupos/miembros (con preselección)
       shareBtn.addEventListener('click', async () => {
+        await ensureSessionReady();
         const modal = document.getElementById('modal-compartir');
         if (!modal) return;
 
-        // set hidden id
         document.getElementById('share-id').value = comida.id;
 
         const grupoSelect = document.getElementById('share-grupo');
@@ -303,7 +295,6 @@ await supabase.from('comidas_dia').update({ personas: val })
         grupoSelect.innerHTML = '<option value="">— Ninguno —</option>';
         personasDiv.innerHTML = '';
 
-        // traer lo ya compartido
         const { data: compartidos } = await supabase
           .from('comidas_compartidas')
           .select('grupo_id, miembro_id')
@@ -312,7 +303,6 @@ await supabase.from('comidas_dia').update({ personas: val })
         const preSelMiembros = new Set((compartidos || []).map(r => r.miembro_id));
         const preSelGrupo = compartidos?.[0]?.grupo_id || '';
 
-        // cargar grupos
         const { data: grupos } = await supabase
           .from('grupos')
           .select('id, nombre')
@@ -324,7 +314,6 @@ await supabase.from('comidas_dia').update({ personas: val })
           grupoSelect.appendChild(opt);
         });
 
-        // al cambiar grupo -> cargar miembros (email/username visibles)
         grupoSelect.onchange = async () => {
           personasDiv.innerHTML = '';
           const grupoId = grupoSelect.value;
@@ -391,13 +380,12 @@ await supabase.from('comidas_dia').update({ personas: val })
             const nombreIng = ingBase.description;
             const cantidadUsada = (parseFloat(ing.cantidad) || 0) * multiplicador;
 
- // usar el UID ya calculado arriba (usuarioId)
-const usuarioActivo = usuarioId;
- const { data: despensaItem } = await supabase              .from('despensa')
+            const { data: despensaItem } = await supabase
+              .from('despensa')
               .select('id, cantidad')
               .eq('nombre', nombreIng)
               .eq('unidad', ingBase.unidad)
-              .eq('owner_id', usuarioActivo)     // ✅ vuelve a 'usuario'
+              .eq('owner_id', usuarioId)
               .maybeSingle();
 
             if (despensaItem) {
@@ -407,7 +395,8 @@ const usuarioActivo = usuarioId;
                 .from('despensa')
                 .update({ cantidad: nuevaCantidad })
                 .eq('id', despensaItem.id)
-                .eq('owner_id', usuarioActivo)            }
+                .eq('owner_id', usuarioId);
+            }
           }
         }
 
@@ -416,9 +405,7 @@ const usuarioActivo = usuarioId;
           .update({ is_completed: nuevoEstado })
           .eq('id', comida.id);
 
-        // avisa al resto de la app
         window.dispatchEvent(new CustomEvent('despensa-cambiada'));
-
         cargarComidaDelDia();
       };
 

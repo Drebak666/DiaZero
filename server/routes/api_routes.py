@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, session, current_app
 import requests, bcrypt, traceback
 
+
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 # -------------------------------
@@ -30,6 +31,11 @@ def _user_id_for(username: str):
 @api_bp.get("/usuario")
 def obtener_usuario_actual():
     return jsonify({"message": "No implementado"}), 501
+
+
+
+
+
 
 # -------------------------------
 # LOGIN / REGISTER / SESSION

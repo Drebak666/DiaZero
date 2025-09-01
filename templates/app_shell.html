@@ -128,6 +128,61 @@
     .mini-player.show{ display:flex; }
     .mp-btn{ width:32px; height:32px; border-radius:9999px; display:flex; align-items:center; justify-content:center; }
     .mini-title{ max-width: 42vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #mini-mic {
+  font-size: 1.2em;   /* un pelín más grande (los demás suelen estar en 1em) */
+  color: #e74c3c;     /* rojo más notorio, puedes elegir otro */
+}
+
+#mini-mic:hover {
+  color: #c0392b;     /* un tono más oscuro al pasar el ratón */
+}
+#mini-mic {
+  font-size: 1.2em;
+  color: #fff;
+  background-color: #e74c3c;
+  border-radius: 50%;
+  padding: 6px;
+}
+
+/* ===== Modal de voz ===== */
+.voice-modal{
+  position: fixed; inset:0; z-index: 80; display:none;
+  background: rgba(2,6,23,.65); backdrop-filter: blur(4px);
+  align-items:center; justify-content:center;
+}
+.voice-modal.show{ display:flex; }
+
+.voice-card{
+  width: min(92vw, 720px); background: rgba(15,23,42,.96);
+  border:1px solid rgba(255,255,255,.08); border-radius:16px;
+  padding: 20px 18px 16px; position:relative; box-shadow:0 10px 30px rgba(0,0,0,.45);
+}
+.voice-close{
+  position:absolute; right:10px; top:10px; width:36px; height:36px; border-radius:9999px;
+  background: rgba(30,41,59,.85); color:#e5e7eb; border:1px solid rgba(255,255,255,.08);
+  display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer;
+}
+.voice-title{ margin:0 42px 12px 6px; font-weight:700; }
+.voice-live{
+  min-height: 140px; padding: 14px 12px; line-height:1.35;
+  border:1px dashed rgba(46,230,255,.5); border-radius:12px;
+  color:#e5e7eb; font-size:1.05rem; white-space:pre-wrap;
+}
+.voice-live.listening{ box-shadow:0 0 12px #2ee6ff inset; }
+
+.voice-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
+.va-btn{
+  background:#334155; color:#e5e7eb; border:1px solid rgba(255,255,255,.08);
+  padding:8px 12px; border-radius:10px; cursor:pointer;
+}
+.va-btn:hover{ background:#3b475e; }
+.va-primary{ background:#6d28d9; }
+.va-primary:hover{ background:#7c3aed; }
+
+/* Estado del botón del micro */
+#mini-mic.grabando{ box-shadow:0 0 14px #2ee6ff; border-radius:9999px; }
+
+
   </style>
 
 
@@ -149,6 +204,8 @@
 <button id="mini-open" class="mp-btn bg-gray-700 hover:bg-gray-600 text-white" title="Abrir reproductor">
   <i class="fa-solid fa-music"></i>
 </button>
+<button id="mini-mic"><i class="fa-solid fa-microphone"></i></button>
+
   </div>
 
   <!-- Botón flotante de reloj -->
@@ -159,6 +216,26 @@
 <button id="mini-home" class="mini-home" title="Ir al inicio">
   <i class="fa-solid fa-house"></i>
 </button>
+
+
+<!-- Modal de voz -->
+<div id="voice-modal" class="voice-modal" aria-hidden="true">
+  <div class="voice-card">
+    <button id="voice-close" class="voice-close" title="Cerrar">×</button>
+    <h3 class="voice-title">
+      <i class="fa-solid fa-microphone"></i> Dictado por voz
+    </h3>
+
+    <div id="voice-live" class="voice-live">Pulsa el micrófono para empezar…</div>
+
+    <div class="voice-actions">
+      <button id="voice-copy"  class="va-btn">Copiar</button>
+      <button id="voice-paste" class="va-btn va-primary">Pegar en la app</button>
+      <button id="voice-create" class="va-btn va-primary">Crear según comando</button>
+
+    </div>
+  </div>
+</div>
 
 
 <!-- Panel desplegable de reloj -->
@@ -180,6 +257,8 @@
   <script src="{{ url_for('static', filename='js/supabaseClient.js') }}" type="module"></script>
   <script src="{{ url_for('static', filename='js/player-shell.js') }}" type="module"></script>
   <script src="{{ url_for('static', filename='js/shell-router.js') }}" type="module"></script>
+<script src="{{ url_for('static', filename='js/microfono.js') }}" type="module"></script>
+
 
 
 

@@ -11,7 +11,14 @@ const el = {
   next:   document.getElementById('mini-next'),
   title:  document.getElementById('mini-title'),
   open:   document.getElementById('mini-open'),
+  mic: document.getElementById('mini-mic'),
+
 };
+
+el.mic?.addEventListener('click', () => {
+  console.log("Micrófono pulsado");
+  // Aquí después conectamos con la grabadora de audio
+});
 
 
 // Audio invisible (propio del shell)
@@ -28,6 +35,9 @@ let queue = [];                 // [{ url? , title, artist, kind?, id? }]
 let index = 0;
 let lastUpdate = 0;
 let __currentBlobUrl = null;    // para revocar URLs locales
+
+
+
 
 // -------- Helpers ----------
 function showShell(show = true){ el.shell?.classList.toggle('show', !!show); }

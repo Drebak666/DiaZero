@@ -1,39 +1,70 @@
 import { supabase } from './supabaseClient.js';
 
+// ===================== Helpers robustos =====================
+const nrm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
-async function cargarIngredientesPendientes() {
+async function getUid() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user?.id || null;
+  } catch { return null; }
+}
+
+async function safeSelect(table, select, filters = []) {
+  try {
+    let q = supabase.from(table).select(select);
+    for (const f of filters) {
+      const [fn, ...args] = f; // ej.: ['eq','owner_id', uid]
+      q = q[fn](...args);
+    }
+    const { data, error } = await q;
+    if (error) return [];
+    return Array.isArray(data) ? data : [];
+  } catch { return []; }
+}
+
+// Nombres ya registrados por el usuario: intenta primero ingredientes_base
+async function fetchIngredientNames(uid){
+  let rows = await safeSelect('ingredientes_base', 'nombre', [['eq','owner_id', uid]]);
+  if (!rows.length) {
+    rows = await safeSelect('ingredientes', 'nombre', [['eq','owner_id', uid]]);
+  }
+  return rows.map(r => r?.nombre).filter(Boolean);
+}
+
+// Supermercados únicos para datalist (base -> ingredientes)
+async function fetchSupermercados(uid){
+  let rows = await safeSelect('ingredientes_base', 'supermercado', [['eq','owner_id', uid]]);
+  if (!rows.length) {
+    rows = await safeSelect('ingredientes', 'supermercado', [['eq','owner_id', uid]]);
+  }
+  return Array.from(new Set(rows.map(r => r?.supermercado).filter(s => s && s.trim() !== '')));
+}
+
+// ===================== Cargar pendientes =====================
+export async function cargarIngredientesPendientes() {
   const contenedor = document.getElementById('contenedor-ingredientes-pendientes');
+  if (!contenedor) return;
   contenedor.innerHTML = 'Cargando...';
 
-  // UID
-  const { data: { user } } = await supabase.auth.getUser();
-  const uid = user?.id;
+  const uid = await getUid();
   if (!uid) { contenedor.innerHTML = 'Sin sesión.'; return; }
 
   // Despensa del usuario
-  const { data: despensa, error: errorDespensa } = await supabase
-    .from('despensa')
-    .select('*')
-    .eq('owner_id', uid);
+  const despensa = await safeSelect('despensa', '*', [['eq','owner_id', uid]]);
+  if (!despensa.length) { contenedor.innerHTML = '<p>No hay ingredientes en despensa.</p>'; return; }
 
-  if (errorDespensa) { contenedor.innerHTML = 'Error al cargar la despensa.'; return; }
+  // Ingredientes ya convertidos (por nombre)
+  const nombresConvertidos = await fetchIngredientNames(uid);
+  const setConvertidos = new Set(nombresConvertidos.map(nrm));
 
-  // Ingredientes ya registrados (usa nombre)
-  const { data: ingredientes, error: errorIngredientes } = await supabase
-    .from('ingredientes')
-    .select('nombre')
-    .eq('owner_id', uid);
-
-  if (errorIngredientes) { contenedor.innerHTML = 'Error al cargar ingredientes.'; return; }
-
-  // Filtrar pendientes: los que no están en ingredientes
-  const yaConvertidos = new Set((ingredientes || []).map(i => i.nombre));
-  const pendientes = (despensa || []).filter(d => !yaConvertidos.has(d.nombre));
-
+  // Filtra los que faltan por convertir
+  const pendientes = despensa.filter(d => !setConvertidos.has(nrm(d.nombre)));
   if (!pendientes.length) { contenedor.innerHTML = '<p>No hay ingredientes pendientes.</p>'; return; }
 
+  // Render
   contenedor.innerHTML = '';
-  pendientes.forEach(item => {
+  for (const item of pendientes) {
     const div = document.createElement('div');
     div.classList.add('pendiente-card');
     div.innerHTML = `
@@ -44,23 +75,24 @@ async function cargarIngredientesPendientes() {
       </div>
     `;
     contenedor.appendChild(div);
-  });
+  }
 
-  // Borrar
-  document.querySelectorAll('.btn-borrar').forEach(btn => {
+  // Borrar de despensa
+  contenedor.querySelectorAll('.btn-borrar').forEach(btn => {
     btn.addEventListener('click', async (e) => {
-      const id = e.target.dataset.id;
+      const id = e.currentTarget.dataset.id;
       await supabase.from('despensa').delete().eq('id', id).eq('owner_id', uid);
       cargarIngredientesPendientes();
+      if (typeof window.cargarDespensa === 'function') window.cargarDespensa();
     });
   });
 
-  // Completar (abrir modal)
+  // Abrir modal completar
   const formCompletarIngrediente = document.getElementById('form-completar-ingrediente');
   const modalCompletar = document.getElementById('modal-completar');
   const compNombreInput = document.getElementById('comp-nombre');
 
-  document.querySelectorAll('.btn-convertir').forEach(btn => {
+  contenedor.querySelectorAll('.btn-convertir').forEach(btn => {
     btn.addEventListener('click', () => {
       compNombreInput.value = btn.dataset.nombre;
       formCompletarIngrediente.dataset.id = btn.dataset.id;
@@ -70,18 +102,14 @@ async function cargarIngredientesPendientes() {
   });
 }
 
-
-
-// Evento para guardar el nuevo ingrediente
-document.getElementById('form-completar-ingrediente').addEventListener('submit', async (e) => {
+// ===================== Guardar conversión =====================
+document.getElementById('form-completar-ingrediente')?.addEventListener('submit', async (e) => {
   e.preventDefault();
 
-  // UID
-  const { data: { user } } = await supabase.auth.getUser();
-  const uid = user?.id;
+  const uid = await getUid();
   if (!uid) return;
 
-  const form = e.target;
+  const form = e.currentTarget;
   const idDespensa = form.dataset.id;
 
   let unidadVal = document.getElementById('comp-unidad').value.trim();
@@ -97,43 +125,46 @@ document.getElementById('form-completar-ingrediente').addEventListener('submit',
     proteinas: parseFloat(document.getElementById('comp-proteinas').value) || null
   };
 
-  // Inserta en 'ingredientes'
-  const { error: insertError } = await supabase.from('ingredientes').insert([{ ...nuevoIngrediente, owner_id: uid }]);
-  if (insertError) { console.error('❌ Error "ingredientes":', insertError.message); return; }
+  // Inserta en 'ingredientes' (despensa formalizada)
+  {
+    const { error } = await supabase.from('ingredientes').insert([{ ...nuevoIngrediente, owner_id: uid }]);
+    if (error) { console.error('❌ Error "ingredientes":', error.message); return; }
+  }
 
-  // Upsert en 'ingredientes_base' con conflicto (nombre, owner_id)
-  const { error: upsertBaseError } = await supabase
+  // Upsert en 'ingredientes_base' (catálogo) con conflicto (nombre, owner_id)
+  {
+    const { error } = await supabase
+      .from('ingredientes_base')
+      .upsert([{
+        nombre: nuevoIngrediente.nombre,
+        unidad: nuevoIngrediente.unidad,
+        cantidad: nuevoIngrediente.cantidad,
+        calorias: nuevoIngrediente.calorias,
+        proteinas: nuevoIngrediente.proteinas,
+        owner_id: uid
+      }], { onConflict: 'nombre,owner_id' });
+    if (error) { console.error('❌ Error "ingredientes_base":', error.message); return; }
+  }
+
+  // Buscar id base (scoped por owner_id) para consultar pack real de supermercado
+  const { data: ingredienteBase } = await supabase
     .from('ingredientes_base')
-    .upsert([{
-      nombre: nuevoIngrediente.nombre,
-      unidad: nuevoIngrediente.unidad,
-      cantidad: nuevoIngrediente.cantidad,
-      calorias: nuevoIngrediente.calorias,
-      proteinas: nuevoIngrediente.proteinas,
-      owner_id: uid
-    }], { onConflict: 'nombre,owner_id' });
-
-  if (upsertBaseError) { console.error('❌ Error "ingredientes_base":', upsertBaseError.message); return; }
-
-  // Buscar id base (scoped por owner_id)
-  const { data: ingredienteBase, error: baseError } = await supabase
-    .from("ingredientes_base")
-    .select("id")
-    .eq("nombre", nuevoIngrediente.nombre)
-    .eq("owner_id", uid)
+    .select('id')
+    .eq('nombre', nuevoIngrediente.nombre)
+    .eq('owner_id', uid)
     .maybeSingle();
 
   let cantidadRealComprada = nuevoIngrediente.cantidad;
   let unidadRealComprada = nuevoIngrediente.unidad;
 
-  // Si hay histórico de supermercado, usa su pack real
   if (ingredienteBase?.id) {
     const { data: supermercadoData } = await supabase
-      .from("ingredientes_supermercado")
-      .select("cantidad, unidad")
-      .eq("ingrediente_id", ingredienteBase.id)
-        .order("fecha_precio", { ascending: false })
-  .maybeSingle();
+      .from('ingredientes_supermercado')
+      .select('cantidad, unidad')
+      .eq('ingrediente_id', ingredienteBase.id)
+      .order('fecha_precio', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (supermercadoData) {
       cantidadRealComprada = supermercadoData.cantidad ?? cantidadRealComprada;
@@ -141,61 +172,46 @@ document.getElementById('form-completar-ingrediente').addEventListener('submit',
     }
   }
 
-  // Actualiza despensa (por id y owner)
-  await supabase.from('despensa').update({
-    cantidad: cantidadRealComprada,
-    unidad: unidadRealComprada
-  }).eq('id', idDespensa).eq('owner_id', uid);
+  // Actualiza despensa con el pack real
+  await supabase
+    .from('despensa')
+    .update({ cantidad: cantidadRealComprada, unidad: unidadRealComprada })
+    .eq('id', idDespensa)
+    .eq('owner_id', uid);
 
-  // Cierra modal y refresca
+  // Cierra modal y refresca pantallas
   const modalCompletar = document.getElementById('modal-completar');
   modalCompletar.classList.add('oculto');
   modalCompletar.style.display = 'none';
   form.reset();
   cargarIngredientesPendientes();
-  if (typeof cargarDespensa === 'function') cargarDespensa();
+  if (typeof window.cargarDespensa === 'function') window.cargarDespensa();
 });
 
-
-
-// Evento para cerrar el modal "Completar ingrediente"
-document.getElementById('cerrar-completar').addEventListener('click', () => {
+// Cerrar modal manualmente
+document.getElementById('cerrar-completar')?.addEventListener('click', () => {
   const modalCompletar = document.getElementById('modal-completar');
   modalCompletar.classList.add('oculto');
-  modalCompletar.style.display = 'none'; // Forzar ocultamiento
+  modalCompletar.style.display = 'none';
 });
 
-async function cargarSupermercadosUnicos() {
-  const { data: { user } } = await supabase.auth.getUser();
-  const uid = user?.id;
+// ===================== Supermercados (datalist) =====================
+export async function cargarSupermercadosUnicos() {
+  const uid = await getUid();
   if (!uid) return;
 
-  const { data: ingredientes, error } = await supabase
-    .from('ingredientes')
-    .select('supermercado')
-    .eq('owner_id', uid);
-
-  if (error) {
-    console.warn('No se pudo cargar supermercados', error.message);
-    return;
-  }
-
-  const supermercados = new Set(
-    (ingredientes || [])
-      .map(i => i.supermercado)
-      .filter(s => s && s.trim() !== '')
-  );
-
+  const supermercados = await fetchSupermercados(uid);
   const datalist = document.getElementById('supermercados');
+  if (!datalist) return;
   datalist.innerHTML = '';
-  supermercados.forEach(nombre => {
+  supermercados.forEach((nombre) => {
     const option = document.createElement('option');
     option.value = nombre;
     datalist.appendChild(option);
   });
 }
 
-// Iniciar pantalla al cargar
+// ===================== Init =====================
 window.addEventListener('DOMContentLoaded', () => {
   cargarIngredientesPendientes();
   cargarSupermercadosUnicos();
