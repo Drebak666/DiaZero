@@ -48,8 +48,7 @@ async function refreshRegistrosFor(appointmentIds){
   const { data, error } = await supabase
     .from('registros')
     .select('archivo_url')
-    .eq('tipo', 'cita')
-    .eq('usuario', uid)
+    .eq('owner_id', uid)
     .in('archivo_url', keys);
 
   if (error) { console.warn('No se pudieron leer registros:', error); regSet = new Set(); return; }
@@ -70,7 +69,7 @@ async function toggleRegistro(cita){
     const { error } = await supabase
       .from('registros')
       .delete()
-      .eq('usuario', uid)
+      .eq('owner_id', uid)
       .eq('tipo', 'cita')
       .eq('archivo_url', key);
     if (error){ alert('No se pudo quitar del registro'); console.error(error); return true; }
@@ -83,7 +82,7 @@ async function toggleRegistro(cita){
       fecha: cita.date || null,
       tipo: 'cita',
       archivo_url: key,
-      usuario: uid
+      owner_id: uid
     };
     const { error } = await supabase.from('registros').insert(row);
     if (error){ alert('No se pudo registrar'); console.error(error); return false; }
@@ -102,7 +101,7 @@ async function registrarAccion(accion, cita){
     fecha: cita.date || null,
     tipo: 'cita',
     archivo_url: '',      // si no tienes archivo, lo dejamos vacío
-    usuario: uid          // tu columna es TEXT; si fuera uuid usa uid sin ::text
+    owner_id: uid      // tu columna es TEXT; si fuera uuid usa uid sin ::text
   };
   const { error } = await supabase.from('registros').insert(row);
   if (error) console.warn('No se pudo registrar la acción:', error);
@@ -195,9 +194,11 @@ async function fetchUltimasCitas() {
 
   if (!uid) { cont.innerHTML = '<em>No autenticado.</em>'; return []; }
 
-  // Mis grupos
+  // Mis grupos  (✅ ahora por usuario_id)
   const { data: memb } = await supabase
-    .from('miembros_grupo').select('grupo_id').eq('usuario_id', uid);
+    .from('miembros_grupo')
+    .select('grupo_id')
+    .eq('usuario_id', uid);
   const misGrupos = (memb || []).map(r => r.grupo_id);
 
   // IDs compartidas conmigo
@@ -209,28 +210,26 @@ async function fetchUltimasCitas() {
   const idsCompartidas = (compLinks || []).map(r => r.actividad_id);
 
   // Citas de 3 vías
-  // Citas de 3 vías
-const [propiasRes, grupoRes, compRes] = await Promise.all([
-  supabase
-    .from('appointments')
-    .select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
-    .eq('owner_id', uid),
+  const [propiasRes, grupoRes, compRes] = await Promise.all([
+    supabase
+      .from('appointments')
+      .select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
+      .eq('owner_id', uid),
 
-  misGrupos.length
-    ? supabase
-        .from('appointments')
-        .select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
-        .in('grupo_id', misGrupos)
-    : Promise.resolve({ data: [] }),
+    misGrupos.length
+      ? supabase
+          .from('appointments')
+          .select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
+          .in('grupo_id', misGrupos)
+      : Promise.resolve({ data: [] }),
 
-  idsCompartidas.length
-    ? supabase
-        .from('appointments')
-        .select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
-        .in('id', idsCompartidas)
-    : Promise.resolve({ data: [] }),
-]);
-
+    idsCompartidas.length
+      ? supabase
+          .from('appointments')
+          .select('id, description, date, start_time, end_time, completed, owner_id, grupo_id, requirements')
+          .in('id', idsCompartidas)
+      : Promise.resolve({ data: [] }),
+  ]);
 
   // Unir TODO y dejar solo próximas (desde hoy), ordenadas por fecha+hora
   const all = uniqById([...(propiasRes.data||[]), ...(grupoRes.data||[]), ...(compRes.data||[])]);
@@ -241,6 +240,7 @@ const [propiasRes, grupoRes, compRes] = await Promise.all([
       String(a.date||'9999-12-31').localeCompare(String(b.date||'9999-12-31')) ||
       String(a.start_time||'').localeCompare(String(b.start_time||'')));
 }
+
 
 // ======== Compartir: estado y utilidades ========
 let shareSet = new Set();                // citas que tienen grupo o personas compartidas
@@ -284,11 +284,12 @@ async function openShareModal(c){
 
   idInput.value = c.id;
 
-  // Grupos del usuario actual
+  // Grupos del usuario actual (✅ ahora por usuario_id)
   const { data:{ user } } = await supabase.auth.getUser();
   const uid = user?.id;
   const { data: memb } = await supabase.from('miembros_grupo')
-    .select('grupo_id').eq('usuario_id', uid);
+    .select('grupo_id')
+    .eq('usuario_id', uid);
   const gIds = (memb||[]).map(r => r.grupo_id);
   let grupos = [];
   if (gIds.length){
@@ -606,6 +607,8 @@ async function refreshUltimas() {
     cache = [...activos, ...finalizadas];
     await refreshShares(cache);   // ← carga estado de compartidos
 
+        await refreshRegistrosFor(cache.map(c => c.id)); // ← estado de registrados (toggle)
+
 
     
     // mostrar solo la más próxima tras cada refresh
@@ -634,10 +637,14 @@ let rtCh = null;
 function startRealtime() {
   if (rtCh) return;
   const handle = () => refreshUltimas();
-    rtCh = supabase.channel('ultimas-citas')
+
+  rtCh = supabase.channel('ultimas-citas')
+    // Refrescar cuando cambian citas o sus compartidos
     .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, handle)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'actividades_compartidas' }, handle)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'miembros_grupo' }, handle)
+
+    // Sincronía requisitos <-> tasks (UPDATE)
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tasks' }, async (payload) => {
       const t = payload.new;
       if (!t || !t.appointment_id || t.requirement_index == null) return;
@@ -651,17 +658,38 @@ function startRealtime() {
       const cur = !!(cita.requirements[idx]?.checked);
       if (cur === !!t.is_completed) return;
 
-      const next = cita.requirements.map((r,i) => i===idx ? { ...r, checked: !!t.is_completed } : r);
+      const next = cita.requirements.map((r,i) =>
+        i === idx ? { ...r, checked: !!t.is_completed } : r
+      );
+      cita.requirements = next;
+      await supabase.from('appointments').update({ requirements: next }).eq('id', cita.id);
+      renderPartial();
+    })
+
+    // Sincronía requisitos <-> tasks (DELETE)
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'tasks' }, async (payload) => {
+      const t = payload.old;
+      if (!t || !t.appointment_id || t.requirement_index == null) return;
+
+      const cita = cache.find(x => x.id === t.appointment_id);
+      if (!cita || !Array.isArray(cita.requirements)) return;
+
+      const idx = Number(t.requirement_index);
+      if (idx < 0 || idx >= cita.requirements.length) return;
+
+      const next = cita.requirements.map((r,i) =>
+        i === idx ? { ...r, checked: false } : r
+      );
       cita.requirements = next;
       await supabase.from('appointments').update({ requirements: next }).eq('id', cita.id);
       renderPartial();
     })
     .subscribe();
 
-
-
   window.addEventListener('beforeunload', () => supabase.removeChannel(rtCh));
 }
+
+window.cargarAgendaHoy?.();
 
 
 // ───────── boot ─────────

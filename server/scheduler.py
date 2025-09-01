@@ -58,14 +58,15 @@ def create_scheduler(app):
     APPT_TABLE, APPT_USER_COL, APPT_DATE_COL, APPT_START_COL = (
         "appointments", "owner_id", "date", "start_time"
     )
-    # Tareas (dueño = 'usuario')
+    # Tareas (dueño = owner_id)
     TASK_TABLE, TASK_USER_COL, TASK_DONE_COL, TASK_DATE_COL, TASK_START_COL = (
-        "tasks", "usuario", "is_completed", "due_date", "start_time"
+    "tasks", "owner_id", "is_completed", "due_date", "start_time"
     )
-    # Rutinas (dueño = 'usuario')
+    # Rutinas (dueño = owner_id)
     ROUT_TABLE, ROUT_USER_COL, ROUT_START_COL, ROUT_DOW_COL, ROUT_ACTIVE_COL, ROUT_END_DATE_COL = (
-        "routines", "usuario", "start_time", "days_of_week", "is_active", "end_date"
+    "routines", "owner_id", "start_time", "days_of_week", "is_active", "end_date"
     )
+
 
     PREFS_TABLE = "notification_prefs"   # user_id uuid, tasks_lead_min int4, citas_leads_min int4[]
     SENT_TABLE  = "notifications_sent"   # user_id uuid, entity_type text, entity_id uuid/text, kind text, sent_at timestamptz

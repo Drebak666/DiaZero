@@ -33,7 +33,7 @@ const { error } = await supabase.from('ingredientes_base').insert([
     unidad,
     calorias,
     proteinas,
-    usuario_id: usuarioId, // 👈 ahora guardamos UID
+owner_id: usuarioId,
     fecha_creacion: new Date().toISOString()
   }
 ]);
@@ -66,7 +66,7 @@ if (!usuarioId) return;
 const { data, error } = await supabase
   .from('ingredientes')
   .select('*')
-  .eq('usuario_id', usuarioId)  // 👈 filtrar por UID
+.eq('owner_id', usuarioId)
   .order('fecha_creacion', { ascending: false });
 
 

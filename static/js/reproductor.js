@@ -44,40 +44,40 @@ function publishPlayerState(overridePlaying = null){
 // Si no existe (error al seleccionar), reintentamos sin ese filtro para no romper.
 // Cargar canciones del usuario actual, evitando el 400 permanente
 async function fetchSongs(){
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id || null;
   const email = (localStorage.getItem('usuario_actual') || '').trim();
   let data = null, error = null;
 
-  // 1) Si hay email -> filtra por usuario
-  if (email) {
+  // intenta owner_id primero
+  if (uid) {
     ({ data, error } = await supabase
       .from('music')
-      .select('id,url,artist,title,created_at,usuario')
+      .select('id,url,artist,title,created_at')
+      .eq('owner_id', uid)
+      .order('created_at', { ascending: false }));
+  }
+  // fallback a columna usuario si existe
+  if (!uid || error) {
+    ({ data, error } = await supabase
+      .from('music')
+      .select('id,url,artist,title,created_at')
       .eq('usuario', email)
       .order('created_at', { ascending: false }));
   }
 
-  // 2) Si NO hay email o hubo error -> sin filtro (no rompas la UI)
-  if (!email || error) {
-    ({ data, error } = await supabase
-      .from('music')
-      .select('id,url,artist,title,created_at')
-      .order('created_at', { ascending: false }));
-  }
+  if (error) { console.error('Error cargando música:', error); data = []; }
 
-  if (error) {
-    console.error('Error cargando música:', error);
-    songsBase = [];
-  } else {
-    const stripExt = (name) => name.replace(/\.[^/.]+$/, '');
-    songsBase = (data || []).map(s => ({
-      id: s.id,
-      url: s.url,
-      artist: s.artist || 'Desconocido',
-      title:  s.title  || stripExt(((s.url || '').split('/').pop()) || 'Sin título'),
-    }));
-  }
+  const stripExt = (n) => n.replace(/\.[^/.]+$/, '');
+  songsBase = (data || []).map(s => ({
+    id: s.id,
+    url: s.url,
+    artist: s.artist || 'Desconocido',
+    title:  s.title  || stripExt(((s.url || '').split('/').pop()) || 'Sin título'),
+  }));
   aplicarFiltro();
 }
+
 
 
 

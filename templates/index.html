@@ -5,6 +5,40 @@
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <title>Mi Agenda</title>
 
+
+
+<script>
+(() => {
+  const orig = window.fetch;
+  window.fetch = async (input, init) => {
+    let url = typeof input === 'string' ? input : (input && input.url) || '';
+
+    if (url.includes('/rest/v1/')) {
+      if (window.UID && /owner_id=eq\.[^&@]+@[^&]+/.test(url)) {
+        url = url.replace(/owner_id=eq\.[^&]+/, `owner_id=eq.${window.UID}`);
+      }
+
+      if (url.includes('.is.null')) {
+        // 🔎 LOG CON PILA para ver archivo y línea que hacen la petición
+        console.warn('is.null detectado → origen abajo ↓\n', url);
+        console.trace('stack');
+
+        // (opcional) quitar el limit conflictivo si viene junto
+        url = url.replace(/[?&]limit=1:1(?=&|$)/, (m) => (m.startsWith('?') ? '?' : ''));
+      }
+    }
+
+    return orig(typeof input === 'string' ? url : new Request(url, input), init);
+  };
+})();
+</script>
+
+
+
+
+
+
+
 <script>
   // Solo si no está ya establecido
   if (!localStorage.getItem("usuario_actual")) {
@@ -44,39 +78,39 @@
 
 
     <!-- Form edición tarea -->
-    <div class="oculto form-modal" id="form-editar-tarea">
-      <h3>Editar Tarea</h3>
-      <form id="editar-formulario-tarea" class="form-editar-cita">
-        <input id="editar-id-tarea" type="hidden" />
-          <input id="editar-tipo" type="hidden" />
+    <!-- Form edición tarea -->
+<!-- Form edición tarea -->
+<div class="oculto form-modal" id="form-editar-tarea">
+  <h3>Editar Tarea</h3>
+  <form id="editar-formulario-tarea" class="form-editar-cita">
+    <input id="editar-id-tarea" type="hidden" />
+    <input id="editar-tipo" type="hidden" />
 
-        <div class="form-group">
-          <label for="editar-descripcion-tarea">Descripción:</label>
-          <input id="editar-descripcion-tarea" type="text" placeholder="Descripción" />
-        </div>
-        <div class="form-grid-2cols">
-          <div class="form-group">
-            <label for="editar-fecha-tarea">Fecha:</label>
-            <input id="editar-fecha-tarea" type="date" />
-          </div>
-         
-        </div>
-        <div class="form-grid-2cols">
-          <div class="form-group">
-            <label for="editar-hora-inicio-tarea">Hora de Inicio:</label>
-            <input id="editar-hora-inicio-tarea" type="time" />
-          </div>
-          <div class="form-group">
-            <label for="editar-hora-fin-tarea">Hora de Fin:</label>
-            <input id="editar-hora-fin-tarea" type="time" />
-          </div>
-        </div>
-        <div class="form-buttons">
-          <button type="submit" class="btn-success">Guardar Cambios</button>
-          <button type="button" id="recoger-edicion-tarea" class="btn-cancel">Recoger</button>
-        </div>
-      </form>
+    <div class="form-group">
+      <label for="editar-descripcion-tarea">Descripción:</label>
+      <input id="editar-descripcion-tarea" type="text" placeholder="Descripción" />
     </div>
+
+    <!-- Fecha + Hora de inicio en una sola fila -->
+    <div class="form-grid-2cols">
+      <div class="form-group">
+        <label for="editar-fecha-tarea">Fecha:</label>
+        <input id="editar-fecha-tarea" type="date" />
+      </div>
+      <div class="form-group">
+        <label for="editar-hora-inicio-tarea">Hora de Inicio:</label>
+        <input id="editar-hora-inicio-tarea" type="time" />
+      </div>
+    </div>
+
+    <div class="form-buttons">
+      <button type="submit" class="btn-success">Guardar Cambios</button>
+      <button type="button" id="recoger-edicion-tarea" class="btn-cancel">Recoger</button>
+    </div>
+  </form>
+</div>
+
+
   </section>
 
   <!-- Añadir Actividad -->
@@ -380,6 +414,14 @@
 <!-- Scripts -->
  
 <script src="{{ url_for('static', filename='js/supabaseClient.js') }}" type="module"></script>
+
+
+<script type="module">
+  import { getUID } from "{{ url_for('static', filename='js/supabaseClient.js') }}";
+  await getUID();            // deja window.UID listo para TODOS los fetch
+</script>
+
+
 <script src="{{ url_for('static', filename='js/main.js') }}" type="module"></script>
 <script type="module" src="{{ url_for('static', filename='js/ultimas-citas.js') }}"></script>
 {% if cargar_add_activity %}
@@ -445,28 +487,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-<button id="quick-mic-btn" title="Capturar por voz">
-  <i class="fas fa-microphone"></i>
-</button>
 
-<!-- Panel de resultado -->
-<div id="quick-mic-panel" hidden>
-  <div class="qmp-header">
-    <strong>Captura rápida</strong>
-    <button type="button" id="qmp-close" aria-label="Cerrar">×</button>
-  </div>
-  <div class="qmp-body">
-    <label>Nombre</label>
-    <input id="qmp-name" type="text" placeholder="Nombre" />
-    <label>Teléfono</label>
-    <input id="qmp-phone" type="text" inputmode="tel" placeholder="+34 600 123 456" />
-    <div class="qmp-actions">
-      <button id="qmp-save-note" class="primary">Guardar en Notas</button>
-      <button id="qmp-copy">Copiar</button>
-    </div>
-    <div id="qmp-status" class="qmp-status"></div>
-  </div>
-</div>
 
 <script>
 

@@ -1,47 +1,38 @@
 import { supabase } from './supabaseClient.js';
-import { getUsuarioActivo } from './usuario.js';
 
 
 async function cargarIngredientesPendientes() {
   const contenedor = document.getElementById('contenedor-ingredientes-pendientes');
   contenedor.innerHTML = 'Cargando...';
 
-const usuario = getUsuarioActivo();
-const { data: despensa, error: errorDespensa } = await supabase
-  .from('despensa')
-  .select('*')
-  .eq('usuario', usuario);
+  // UID
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) { contenedor.innerHTML = 'Sin sesión.'; return; }
 
+  // Despensa del usuario
+  const { data: despensa, error: errorDespensa } = await supabase
+    .from('despensa')
+    .select('*')
+    .eq('owner_id', uid);
 
-  if (errorDespensa) {
-    contenedor.innerHTML = 'Error al cargar la despensa.';
-    return;
-  }
+  if (errorDespensa) { contenedor.innerHTML = 'Error al cargar la despensa.'; return; }
 
-  // 2. Obtener ingredientes ya registrados
- const { data: ingredientes, error: errorIngredientes } = await supabase
-  .from('ingredientes')
-  .select('description')
-  .eq('usuario', usuario);
+  // Ingredientes ya registrados (usa nombre)
+  const { data: ingredientes, error: errorIngredientes } = await supabase
+    .from('ingredientes')
+    .select('nombre')
+    .eq('owner_id', uid);
 
+  if (errorIngredientes) { contenedor.innerHTML = 'Error al cargar ingredientes.'; return; }
 
-  if (errorIngredientes) {
-    contenedor.innerHTML = 'Error al cargar ingredientes.';
-    return;
-  }
+  // Filtrar pendientes: los que no están en ingredientes
+  const yaConvertidos = new Set((ingredientes || []).map(i => i.nombre));
+  const pendientes = (despensa || []).filter(d => !yaConvertidos.has(d.nombre));
 
-  // 3. Filtrar: mostrar solo los que aún no están en la tabla ingredientes
-  const yaConvertidos = new Set(ingredientes.map(i => i.description));
-  const pendientes = despensa.filter(d => !yaConvertidos.has(d.nombre));
-
-  // 4. Mostrar
-  if (pendientes.length === 0) {
-    contenedor.innerHTML = '<p>No hay ingredientes pendientes.</p>';
-    return;
-  }
+  if (!pendientes.length) { contenedor.innerHTML = '<p>No hay ingredientes pendientes.</p>'; return; }
 
   contenedor.innerHTML = '';
-
   pendientes.forEach(item => {
     const div = document.createElement('div');
     div.classList.add('pendiente-card');
@@ -52,54 +43,52 @@ const { data: despensa, error: errorDespensa } = await supabase
         <button class="btn-borrar" data-id="${item.id}">❌</button>
       </div>
     `;
-
     contenedor.appendChild(div);
   });
 
-  // Eventos para el botón "Borrar"
+  // Borrar
   document.querySelectorAll('.btn-borrar').forEach(btn => {
     btn.addEventListener('click', async (e) => {
       const id = e.target.dataset.id;
-      await supabase.from('despensa').delete().eq('id', id);
+      await supabase.from('despensa').delete().eq('id', id).eq('owner_id', uid);
       cargarIngredientesPendientes();
     });
   });
 
-  // Eventos para el botón "Completar"
+  // Completar (abrir modal)
   const formCompletarIngrediente = document.getElementById('form-completar-ingrediente');
   const modalCompletar = document.getElementById('modal-completar');
   const compNombreInput = document.getElementById('comp-nombre');
 
   document.querySelectorAll('.btn-convertir').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      console.log('Botón "Completar" clicado.'); // Registro para depuración
-      const nombre = btn.dataset.nombre;
-      const id = btn.dataset.id;
-
-      compNombreInput.value = nombre; // Rellenar el nombre del ingrediente
-      formCompletarIngrediente.dataset.id = id; // Guardar el ID en el formulario
-      modalCompletar.classList.remove('oculto'); // Asegurarse de que la clase 'oculto' se remueve
-      modalCompletar.style.display = 'block'; // Forzar la visualización del modal
+    btn.addEventListener('click', () => {
+      compNombreInput.value = btn.dataset.nombre;
+      formCompletarIngrediente.dataset.id = btn.dataset.id;
+      modalCompletar.classList.remove('oculto');
+      modalCompletar.style.display = 'block';
     });
   });
 }
 
-// Ejecutar al cargar la página
-window.addEventListener('load', cargarIngredientesPendientes);
+
 
 // Evento para guardar el nuevo ingrediente
 document.getElementById('form-completar-ingrediente').addEventListener('submit', async (e) => {
   e.preventDefault();
 
+  // UID
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return;
+
   const form = e.target;
   const idDespensa = form.dataset.id;
 
-  // Definir unidadVal antes del objeto
   let unidadVal = document.getElementById('comp-unidad').value.trim();
-  if (!unidadVal) unidadVal = 'ud';  // o 'g', elige el que prefieras
+  if (!unidadVal) unidadVal = 'ud';
 
   const nuevoIngrediente = {
-    description: document.getElementById('comp-nombre').value.trim(),
+    nombre: document.getElementById('comp-nombre').value.trim(),
     supermercado: document.getElementById('comp-supermercado').value.trim() || null,
     precio: parseFloat(document.getElementById('comp-precio').value) || null,
     cantidad: parseFloat(document.getElementById('comp-cantidad').value) || null,
@@ -108,88 +97,65 @@ document.getElementById('form-completar-ingrediente').addEventListener('submit',
     proteinas: parseFloat(document.getElementById('comp-proteinas').value) || null
   };
 
-  // ***** INICIO DE LA DEPURACIÓN: AÑADE ESTA LÍNEA AQUÍ *****
-  console.log("Valor de nuevoIngrediente.unidad antes de upsert a ingredientes_base:", nuevoIngrediente.unidad);
-  // ***** FIN DE LA DEPURACIÓN *****
+  // Inserta en 'ingredientes'
+  const { error: insertError } = await supabase.from('ingredientes').insert([{ ...nuevoIngrediente, owner_id: uid }]);
+  if (insertError) { console.error('❌ Error "ingredientes":', insertError.message); return; }
 
-  const { error: insertError } = await supabase.from('ingredientes').insert([nuevoIngrediente]);
+  // Upsert en 'ingredientes_base' con conflicto (nombre, owner_id)
+  const { error: upsertBaseError } = await supabase
+    .from('ingredientes_base')
+    .upsert([{
+      nombre: nuevoIngrediente.nombre,
+      unidad: nuevoIngrediente.unidad,
+      cantidad: nuevoIngrediente.cantidad,
+      calorias: nuevoIngrediente.calorias,
+      proteinas: nuevoIngrediente.proteinas,
+      owner_id: uid
+    }], { onConflict: 'nombre,owner_id' });
 
-  if (insertError) {
-    console.error('❌ Error al guardar el ingrediente en la tabla "ingredientes":', insertError.message);
-    return;
-  }
+  if (upsertBaseError) { console.error('❌ Error "ingredientes_base":', upsertBaseError.message); return; }
 
-  // Guardar también en ingredientes_base
-const { error: upsertBaseError } = await supabase
-  .from('ingredientes_base')
-  .upsert([{
-    nombre: nuevoIngrediente.description,
-    unidad: nuevoIngrediente.unidad,
-    cantidad: nuevoIngrediente.cantidad,
-    calorias: nuevoIngrediente.calorias,
-    proteinas: nuevoIngrediente.proteinas
-  }], {
-    onConflict: ['nombre']  // 👈 Esto indica que si ya existe, lo actualice
-  });
-
-
-
-  // ***** INICIO DE LA DEPURACIÓN Y MANEJO DE ERRORES: AÑADE ESTE BLOQUE AQUÍ *****
-  if (upsertBaseError) {
-    console.error('❌ Error al guardar en ingredientes_base:', upsertBaseError.message);
-    // Puedes decidir si quieres detener la ejecución aquí o continuar.
-    // Si la unidad es crítica, deberías hacer 'return;'.
-    // Si no es crítica y prefieres que el resto del proceso siga, podrías quitar el 'return'.
-    // Para depurar, es mejor mantener el 'return'.
-    return;
-  }
-  // ***** FIN DE LA DEPURACIÓN Y MANEJO DE ERRORES *****
-
-  console.log("Actualizando despensa con:", {
-    cantidad: nuevoIngrediente.cantidad,
-    unidad: nuevoIngrediente.unidad
-  });
-
-  // Buscar el ingrediente en ingredientes_base
+  // Buscar id base (scoped por owner_id)
   const { data: ingredienteBase, error: baseError } = await supabase
     .from("ingredientes_base")
     .select("id")
-    .eq("description", nuevoIngrediente.description)
-    .single();
+    .eq("nombre", nuevoIngrediente.nombre)
+    .eq("owner_id", uid)
+    .maybeSingle();
 
   let cantidadRealComprada = nuevoIngrediente.cantidad;
   let unidadRealComprada = nuevoIngrediente.unidad;
 
-  // Buscar en ingredientes_supermercado si hay cantidad real comprada
-  if (ingredienteBase && ingredienteBase.id) {
-    const { data: supermercadoData, error: supermercadoError } = await supabase
+  // Si hay histórico de supermercado, usa su pack real
+  if (ingredienteBase?.id) {
+    const { data: supermercadoData } = await supabase
       .from("ingredientes_supermercado")
       .select("cantidad, unidad")
       .eq("ingrediente_id", ingredienteBase.id)
-      .order("fecha_precio", { ascending: false })
-      .limit(1)
-      .single();
+        .order("fecha_precio", { ascending: false })
+  .maybeSingle();
 
     if (supermercadoData) {
-      cantidadRealComprada = supermercadoData.cantidad;
-      unidadRealComprada = supermercadoData.unidad;
+      cantidadRealComprada = supermercadoData.cantidad ?? cantidadRealComprada;
+      unidadRealComprada = supermercadoData.unidad ?? unidadRealComprada;
     }
   }
 
+  // Actualiza despensa (por id y owner)
   await supabase.from('despensa').update({
     cantidad: cantidadRealComprada,
     unidad: unidadRealComprada
-  }).eq('id', idDespensa);
+  }).eq('id', idDespensa).eq('owner_id', uid);
 
+  // Cierra modal y refresca
   const modalCompletar = document.getElementById('modal-completar');
   modalCompletar.classList.add('oculto');
   modalCompletar.style.display = 'none';
   form.reset();
   cargarIngredientesPendientes();
-  if (typeof cargarDespensa === 'function') {
-    cargarDespensa();
-  }
+  if (typeof cargarDespensa === 'function') cargarDespensa();
 });
+
 
 
 // Evento para cerrar el modal "Completar ingrediente"
@@ -200,9 +166,14 @@ document.getElementById('cerrar-completar').addEventListener('click', () => {
 });
 
 async function cargarSupermercadosUnicos() {
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return;
+
   const { data: ingredientes, error } = await supabase
     .from('ingredientes')
-    .select('supermercado');
+    .select('supermercado')
+    .eq('owner_id', uid);
 
   if (error) {
     console.warn('No se pudo cargar supermercados', error.message);
@@ -210,7 +181,9 @@ async function cargarSupermercadosUnicos() {
   }
 
   const supermercados = new Set(
-    ingredientes.map(i => i.supermercado).filter(s => s && s.trim() !== '')
+    (ingredientes || [])
+      .map(i => i.supermercado)
+      .filter(s => s && s.trim() !== '')
   );
 
   const datalist = document.getElementById('supermercados');
@@ -222,8 +195,8 @@ async function cargarSupermercadosUnicos() {
   });
 }
 
-// Ejecutar ambas funciones al cargar la página
-window.addEventListener('load', () => {
+// Iniciar pantalla al cargar
+window.addEventListener('DOMContentLoaded', () => {
   cargarIngredientesPendientes();
   cargarSupermercadosUnicos();
 });

@@ -52,8 +52,8 @@ async function fetchAllFromSupabase() {
   // RUTINAS
   const [rOwn, rGrp, rInd] = await Promise.all([
     supabase.from('routines')
-      .select('id, description, date, start_time, end_time, is_completed, usuario, grupo_id')
-      .eq('usuario', uid),
+   .select('id, description, date, start_time, end_time, is_completed, owner_id, grupo_id')
+   .eq('owner_id', uid),
     misGrupos.length
       ? supabase.from('routines')
           .select('id, description, date, start_time, end_time, is_completed, usuario, grupo_id')
@@ -69,14 +69,14 @@ async function fetchAllFromSupabase() {
   const rutinas = uniqById([...(rOwn.data||[]), ...(rGrp.data||[]), ...(rInd.data||[])]).map(r => ({
     id: r.id, tipo:'rutina', descripcion:r.description, fecha:r.date||null,
     hora_inicio: hhmm(r.start_time), hora_fin: hhmm(r.end_time), estado: estadoTxt(r.is_completed),
-    usuario: r.usuario||null, grupo_id: r.grupo_id||null
+    usuario: r.owner_id||null, grupo_id: r.grupo_id||null
   }));
 
   // TAREAS
   const [tOwn, tGrp, tInd] = await Promise.all([
     supabase.from('tasks')
-      .select('id, description, due_date, start_time, end_time, is_completed, usuario, grupo_id')
-      .eq('usuario', uid),
+   .select('id, description, due_date, start_time, end_time, is_completed, owner_id, grupo_id')
+   .eq('owner_id', uid),
     misGrupos.length
       ? supabase.from('tasks')
           .select('id, description, due_date, start_time, end_time, is_completed, usuario, grupo_id')
@@ -92,14 +92,14 @@ async function fetchAllFromSupabase() {
   const tareas = uniqById([...(tOwn.data||[]), ...(tGrp.data||[]), ...(tInd.data||[])]).map(t => ({
     id: t.id, tipo:'tarea', descripcion:t.description, fecha:t.due_date||null,
     hora_inicio: hhmm(t.start_time), hora_fin: hhmm(t.end_time), estado: estadoTxt(t.is_completed),
-    usuario: t.usuario||null, grupo_id: t.grupo_id||null
+    usuario: t.owner_id||null, grupo_id: t.grupo_id||null
   }));
 
   // CITAS
   const [aOwn, aGrp, aInd] = await Promise.all([
     supabase.from('appointments')
-      .select('id, description, date, start_time, end_time, completed, usuario, grupo_id')
-      .eq('usuario', uid),
+   .select('id, description, date, start_time, end_time, completed, owner_id, grupo_id')
+   .eq('owner_id', uid),
     misGrupos.length
       ? supabase.from('appointments')
           .select('id, description, date, start_time, end_time, completed, usuario, grupo_id')
@@ -115,7 +115,7 @@ async function fetchAllFromSupabase() {
   const citas = uniqById([...(aOwn.data||[]), ...(aGrp.data||[]), ...(aInd.data||[])]).map(a => ({
     id: a.id, tipo:'cita', descripcion:a.description, fecha:a.date||null,
     hora_inicio: hhmm(a.start_time), hora_fin: hhmm(a.end_time), estado: estadoTxt(a.completed),
-    usuario: a.usuario||null, grupo_id: a.grupo_id||null
+   usuario: a.owner_id||null, grupo_id: a.grupo_id||null
   }));
 
   return [...rutinas, ...tareas, ...citas];

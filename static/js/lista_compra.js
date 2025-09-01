@@ -40,13 +40,15 @@ form.addEventListener('submit', async (e) => {
   if (!uid) return;
 
   // 👇 CAMBIO: usa owner_id y acepta description|nombre
-  const { data: ingredientes } = await supabase
-    .from('ingredientes_base')
-    .select('description, nombre')   // cualquiera que exista
-    .eq('owner_id', uid);           // <-- antes ponía usuario_id
+const { data: ingredientes } = await supabase
+  .from('ingredientes_base')
+  .select('nombre')
+  .eq('owner_id', uid);
 
   const normalizar = str => (str || '').toLowerCase().trim().replace(/(es|s)$/, '');
-  const getDesc = i => (i?.description ?? i?.nombre ?? '');
+const getDesc = i => (i?.nombre ?? '');
+
+
   const existentes = new Set((ingredientes || []).map(i => normalizar(getDesc(i))));
 
   const singular = str => str.replace(/(es|s)$/, '');
@@ -112,17 +114,17 @@ async function cargarLista() {
   }
 
   // catálogo del usuario (TABLA BASE)
-  const { data: ingredientes } = await supabase
-  .from('ingredientes_base')
-  .select('description, supermercado, precio, cantidad, unidad')
-  .eq('owner_id', uid);
+ const { data: ingredientes } = await supabase
+   .from('ingredientes_base')
+   .select('nombre, supermercado, precio, cantidad, unidad')
+   .eq('owner_id', uid);;
 
   const mapaIngredientes = new Map();
   const supermercadosUnicos = new Set();
-  const existentesSet = new Set((ingredientes || []).map(i => i.description.trim().toLowerCase().replace(/(es|s)$/, '')));
+ const existentesSet = new Set((ingredientes || []).map(i => i.nombre.trim().toLowerCase().replace(/(es|s)$/, '')));
 
-  (ingredientes || []).forEach(i => {
-    const key = i.description.trim().toLowerCase().replace(/(es|s)$/, '');
+(ingredientes || []).forEach(i => {
+   const key = i.nombre.trim().toLowerCase().replace(/(es|s)$/, '');
     if (i.supermercado) supermercadosUnicos.add(i.supermercado);
     if (!mapaIngredientes.has(key)) mapaIngredientes.set(key, []);
     mapaIngredientes.get(key).push(i);
@@ -306,11 +308,11 @@ document.getElementById('agregar-completados-despensa').addEventListener('click'
   for (const item of (completados || [])) {
     // pack base desde ingredientes_base
     const { data: datosIngrediente } = await supabase
-      .from('ingredientes_base')
-      .select('cantidad, unidad')
-      .eq('description', item.nombre)
-      .eq('owner_id', uid)
-      .maybeSingle();
+   .from('ingredientes_base')
+   .select('cantidad, unidad')
+   .eq('nombre', item.nombre)
+   .eq('owner_id', uid)
+   .maybeSingle();
 
     const cantidadComprada = datosIngrediente?.cantidad ?? 1;
     const unidadComprada = datosIngrediente?.unidad ?? 'ud';
@@ -374,20 +376,26 @@ async function actualizarContadorLista() {
   if (!uid) return;
 
   const { data } = await supabase
-  .from('lista_compra')
-  .select('id')
-  .eq('owner_id', uid)
-  .eq('completado', false);
+    .from('lista_compra')
+    .select('id')
+    .eq('owner_id', uid)
+    .eq('completado', false);
 
   const cantidad = data?.length ?? 0;
-  document.querySelectorAll('.contador-lista').forEach(span => { span.textContent = cantidad; });
+  document.querySelectorAll('#contador-lista, .contador-lista').forEach(span => {
+    span.textContent = cantidad;
+    span.style.display = cantidad > 0 ? 'inline-block' : 'none';
+  });
 }
 
-// ====== Init ======
-document.addEventListener('DOMContentLoaded', () => {
-  supermercado1Select.addEventListener('change', cargarLista);
-  supermercado2Select.addEventListener('change', cargarLista);
-  cargarLista();
-  cargarPendientes();
-  actualizarContadorLista();
-});
+
+async function actualizarContadorNotas() {
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id; if (!uid) return;
+  const { data, error } = await supabase.from('notas').select('id').eq('owner_id', uid);
+  if (error) console.error('[contador notas]', error.message, error.details, error.hint);
+  const n = data?.length || 0;
+  const el = document.getElementById('contador-notas');
+  if (el) { el.textContent = n; el.style.display = n > 0 ? 'inline-block' : 'none'; }
+}
+

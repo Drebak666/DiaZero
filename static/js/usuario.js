@@ -41,8 +41,13 @@ if (btnLogout) {
 
 });
 
+// Devuelve el UID sincronamente si ya está disponible
 export function getUsuarioActivo() {
-  const usuario = localStorage.getItem('usuario_actual');
-  return usuario || null;
+  return window.UID || null; // compat: el resto del código espera "usuario", pero ahora es UID
 }
-
+// Alternativa async si la necesitas en algún sitio:
+export async function getUidActual() {
+  const { data: { user } } = await supabase.auth.getUser();
+  window.UID = user?.id || null;
+  return window.UID;
+}

@@ -203,11 +203,11 @@ if (loginForm) {
       if (selErr) throw selErr;
 
       if (!perfil) {
-        const { data: inserted, error: insErr } = await supabase
-          .from('usuarios')
-.upsert({ uuid: userId, username: email, role: 'admin' }, { onConflict: 'uuid' })
-          .select('username, role')
-          .single();
+         const { data: inserted, error: insErr } = await supabase
+   .from('usuarios')
+   .upsert({ id: userId, username: email, role: 'admin' }, { onConflict: 'id' })
+   .select('username, role')
+   .single();
         if (insErr) throw insErr;
         perfil = inserted;
       } else if (perfil.role !== 'admin') {

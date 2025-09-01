@@ -31,7 +31,7 @@ async function cargarTipos() {
   const { data, error } = await supabase
     .from('registros')
     .select('tipo')
-    .eq('usuario_id', uid);
+    .eq('owner_id', uid);
 
   if (error) {
     console.error(error);
@@ -92,7 +92,7 @@ async function mostrarRegistros() {
   let query = supabase
     .from('registros')
     .select('*')
-    .eq('usuario_id', uid)
+    .eq('owner_id', uid)
     .order('fecha', { ascending: false });
 
   if (filtro) query = query.eq('tipo', filtro);
@@ -120,11 +120,13 @@ async function mostrarRegistros() {
       div.innerHTML = `
         <strong>${reg.nombre}</strong> <em>(${reg.tipo})</em><br>
         ${reg.descripcion ? `<p>${reg.descripcion}</p>` : ''}
-        ${
+       ${
           reg.archivo_url
-            ? /\.(jpg|jpeg|png|gif)$/i.test(reg.archivo_url)
-              ? `<img src="${reg.archivo_url}" alt="Imagen" style="max-width:100%; max-height:150px; margin-top:10px;">`
-              : `<a href="${reg.archivo_url}" target="_blank">📄 Ver archivo</a>`
+            ? (String(reg.archivo_url).startsWith('cita:')
+                ? `<span class="nota-archivo">📌 Registrado desde una cita</span>`
+                : (/\.(jpg|jpeg|png|gif)$/i.test(reg.archivo_url)
+                    ? `<img src="${reg.archivo_url}" alt="Imagen" style="max-width:100%; max-height:150px; margin-top:10px;">`
+                    : `<a href="${reg.archivo_url}" target="_blank">📄 Ver archivo</a>`))
             : ''
         }
         <div class="registro-botones">
@@ -142,8 +144,11 @@ async function mostrarRegistros() {
       // Borrar (RLS: solo si usuario_id = auth.uid())
       div.querySelector('.btn-borrar').addEventListener('click', async () => {
         if (!confirm('¿Borrar este registro?')) return;
-        const { error } = await supabase.from('registros').delete().eq('id', reg.id);
-        if (error) console.error(error);
+ const uid = (await supabase.auth.getUser()).data.user?.id;
+ const { error } = await supabase.from('registros')
+   .delete()
+   .eq('id', reg.id)
+   .eq('owner_id', uid);        if (error) console.error(error);
         await mostrarRegistros();
       });
 
@@ -199,9 +204,9 @@ form.addEventListener('submit', async (e) => {
   const editandoId = form.dataset.editandoId;
 
   if (editandoId) {
-    const { error } = await supabase.from('registros').update({
-      nombre, descripcion, fecha, tipo, ...(archivo_url && { archivo_url })
-    }).eq('id', editandoId);
+const { error } = await supabase.from('registros').update({
+        nombre, descripcion, fecha, tipo, ...(archivo_url && { archivo_url })
+}).eq('id', editandoId).eq('owner_id', uid);
     if (error) {
       alert('Error al actualizar');
     } else {
@@ -212,9 +217,9 @@ form.addEventListener('submit', async (e) => {
       await mostrarRegistros();
     }
   } else {
-    const { error } = await supabase.from('registros').insert([{
-      nombre, descripcion, fecha, tipo, archivo_url, usuario_id: uid
-    }]);
+   const { data, error } = await supabase.from('registros').insert([{ 
+   nombre, descripcion, tipo, fecha, archivo_url, owner_id: uid 
+ }]);
     if (error) {
       alert('Error al guardar');
     } else {

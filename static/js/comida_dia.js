@@ -236,6 +236,8 @@ if (miembroIds.length) {
   .from('ingredientes_base')
   .select('id, description, precio, cantidad, calorias, proteinas, unidad')
   .in('id', idsIngredientes)
+  .eq('owner_id', usuarioId);
+  
 
 
 if (!ingData || ingData.length === 0) {
@@ -276,8 +278,9 @@ if (!ingData || ingData.length === 0) {
       personasInput.style.width = '58px';
       personasInput.onchange = async () => {
         const val = Math.max(1, parseInt(personasInput.value) || 1);
-        await supabase.from('comidas_dia').update({ personas: val }).eq('id', comida.id);
-        cargarComidaDelDia();
+await supabase.from('comidas_dia').update({ personas: val })
+   .eq('id', comida.id)
+   .eq('owner_id', usuarioId);        cargarComidaDelDia();
       };
 
       const shareBtn = document.createElement('button');
@@ -388,13 +391,13 @@ if (!ingData || ingData.length === 0) {
             const nombreIng = ingBase.description;
             const cantidadUsada = (parseFloat(ing.cantidad) || 0) * multiplicador;
 
-            const usuarioActivo = getUsuarioActivo();
-            const { data: despensaItem } = await supabase
-              .from('despensa')
+ // usar el UID ya calculado arriba (usuarioId)
+const usuarioActivo = usuarioId;
+ const { data: despensaItem } = await supabase              .from('despensa')
               .select('id, cantidad')
               .eq('nombre', nombreIng)
               .eq('unidad', ingBase.unidad)
-  .eq('usuario', usuarioActivo)      // ✅ vuelve a 'usuario'
+              .eq('owner_id', usuarioActivo)     // ✅ vuelve a 'usuario'
               .maybeSingle();
 
             if (despensaItem) {
@@ -404,8 +407,7 @@ if (!ingData || ingData.length === 0) {
                 .from('despensa')
                 .update({ cantidad: nuevaCantidad })
                 .eq('id', despensaItem.id)
-  .eq('usuario', usuarioActivo)      // ✅ vuelve a 'usuario'
-            }
+                .eq('owner_id', usuarioActivo)            }
           }
         }
 

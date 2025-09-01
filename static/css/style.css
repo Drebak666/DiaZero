@@ -1673,5 +1673,89 @@ header {
   transform: scale(.995);
 }
 
+/* Asegura separación entre la fila de acciones y los controles de duración */
+.actividad-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Contenedor de los botones - 15 +  */
+.actividad-duracion {
+  margin-top: 6px;              /* debajo de los redondos */
+  display: flex;
+  justify-content: flex-start;  /* alineado a la izquierda de la tarjeta */
+}
+
+/* Pill compacto y discreto */
+.duracion-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  border-radius: 999px;         /* pastilla */
+  user-select: none;
+}
+
+/* El número “15” */
+.duracion-row .duracion-label {
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+  text-align: center;
+  opacity: 0.9;
+}
+
+/* Botoncitos - y + */
+.btn-duracion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  transition: transform .08s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
+}
+
+/* Hover/active sutiles */
+.btn-duracion:hover { background: rgba(255,255,255,0.06); }
+.btn-duracion:active { transform: translateY(1px) scale(0.98); }
+
+/* Estado discreto (menos “ruido” visual) */
+.btn-duracion { opacity: 0.85; }
+.btn-duracion:hover { opacity: 1; }
+
+/* Modo oscuro: contornos apenas visibles pero claros en hover */
+@media (prefers-color-scheme: dark) {
+  .duracion-row { border-color: rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); }
+  .btn-duracion { border-color: rgba(255,255,255,0.18); }
+}
+
+/* La tarjeta puede envolver a nueva línea y alinea arriba */
+.actividad-item{
+  flex-wrap: wrap;         /* permite bajar a otra línea */
+  align-items: flex-start; /* alinea el contenido arriba */
+}
+
+/* Info ocupa el espacio principal; acciones solo su ancho */
+.actividad-info{ flex: 1 1 auto; }
+.actividad-actions{ flex: 0 0 auto; }
+
+/* El bloque - 15 + va SIEMPRE debajo (línea nueva) y alineado a la derecha */
+.actividad-duracion{
+  flex: 0 0 100%;          /* fuerza salto a nueva línea */
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end;  /* ponlo a la derecha; usa flex-start si lo prefieres a la izq. */
+}
 
  

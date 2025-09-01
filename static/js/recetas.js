@@ -1,7 +1,6 @@
 // static/js/recetas.js
 import { supabase } from './supabaseClient.js';
 import { calcularTotalesReceta } from '../utils/calculos_ingredientes.js';
-import { getUsuarioActivo } from './usuario.js';
 
 function showMessageModal(mensaje) {
   const modal = document.getElementById('message-modal');
@@ -31,7 +30,6 @@ async function getUidActual() {
     const { data: { user } } = await supabase.auth.getUser();
     if (user?.id) return user.id;
   } catch (_) {}
-  const username = getUsuarioActivo();
   if (!username) return null;
   const { data: uRow } = await supabase
     .from('usuarios')

@@ -1,5 +1,17 @@
+
+
+
+
 // static/js/main.js
 import { supabase } from './supabaseClient.js';
+
+
+// cuando tengas la sesión/usuario
+const { data: { user } } = await supabase.auth.getUser();
+const uid = user?.id;
+window.UID = uid; // <-- añade esto (queda global)
+
+
 import { enablePush, sendTest as sendTestPush, unsubscribe as unsubscribePush } from '/static/js/push.js';
 window.enablePush = enablePush;
 window.sendTestPush = sendTestPush;
@@ -79,13 +91,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 // =========================
 
 async function actualizarContadorLista() {
-  const usuario = localStorage.getItem('usuario_actual');
-  if (!usuario) return;
-  const { data: items } = await supabase
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return;
+
+  const { data: items, error } = await supabase
     .from('lista_compra')
     .select('id')
-    .eq('usuario', usuario)
+    .eq('owner_id', uid)
     .eq('completado', false);
+
+  if (error) console.error('[contador lista]', error.message, error.details, error.hint);
 
   const total = items?.length || 0;
   const badge = document.getElementById('contador-lista');
@@ -95,25 +111,28 @@ async function actualizarContadorLista() {
   }
 }
 
+
 async function verificarDespensaYActualizar() {
-  const usuario = localStorage.getItem('usuario_actual');
-  if (!usuario) return 0;
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return 0;
 
   let añadidos = 0;
 
-  // A) evitar duplicados
+  // A) evitar duplicados en lista_compra (pendientes del usuario)
   const { data: listaActual } = await supabase
     .from('lista_compra')
     .select('id, nombre, completado')
-    .eq('usuario', usuario)
+    .eq('owner_id', uid)
     .eq('completado', false);
+
   const yaEnLista = new Set((listaActual || []).map(i => (i.nombre || '').toLowerCase().trim()));
 
   // B) STOCK BAJO GLOBAL (<15% del pack)
   const { data: despensaAll } = await supabase
     .from('despensa')
     .select('id, nombre, cantidad, unidad, cantidad_total')
-    .eq('usuario', usuario);
+    .eq('owner_id', uid);
 
   for (const d of (despensaAll || [])) {
     const nombre = (d.nombre || '').trim();
@@ -126,8 +145,8 @@ async function verificarDespensaYActualizar() {
     if (ratio < 0.15 && !yaEnLista.has(nombre.toLowerCase())) {
       await supabase.from('lista_compra').insert({
         nombre,
-        usuario,
-        cantidad: d.cantidad_total ?? null, // repón 1 pack
+        owner_id: uid,          // <<<<<<
+        cantidad: d.cantidad_total ?? null,
         unidad: d.unidad ?? null,
         completado: false
       });
@@ -143,7 +162,7 @@ async function verificarDespensaYActualizar() {
     .from('comidas_dia')
     .select('receta_id, personas')
     .eq('fecha', hoy)
-    .eq('usuario', usuario);
+    .eq('owner_id', uid);       // <<<<<<
   if (errComidas || !comidasDia?.length) return añadidos;
 
   const recetaIds = [...new Set(comidasDia.map(c => c.receta_id))];
@@ -159,22 +178,21 @@ async function verificarDespensaYActualizar() {
 
   const ingIds = [...new Set(ingRecetas.map(i => i.ingrediente_id))];
 
-  // ingredientes_base (primero por usuario; si está vacío, sin filtro)
+  // ingredientes_base del usuario (si usas multiusuario en esta tabla)
   let { data: ingBase } = await supabase
     .from('ingredientes_base')
-    .select('id, description, unidad, cantidad')
+    .select('id, description, nombre, unidad, cantidad')
     .in('id', ingIds)
-    .eq('usuario', usuario);
+    .eq('owner_id', uid);       // <<<<<<
   if (!ingBase || !ingBase.length) {
     const alt = await supabase
       .from('ingredientes_base')
-      .select('id, description, unidad, cantidad')
+      .select('id, description, nombre, unidad, cantidad')
       .in('id', ingIds);
     ingBase = alt.data || [];
   }
   if (!ingBase.length) return añadidos;
 
-  // helpers
   const byId = new Map(ingBase.map(i => [i.id, i]));
   const toBase = (cant, uni) => {
     const n = parseFloat(cant) || 0;
@@ -186,7 +204,7 @@ async function verificarDespensaYActualizar() {
     return { cant: n, uni: 'ud' };
   };
 
-  // Necesarios HOY (sumados × personas) -> clave: "nombre|uniBase"
+  // Necesarios HOY (sumados × personas)
   const necesarios = new Map();
   for (const r of ingRecetas) {
     const base = byId.get(r.ingrediente_id);
@@ -198,13 +216,13 @@ async function verificarDespensaYActualizar() {
     necesarios.set(key, (necesarios.get(key) || 0) + (cant * mult));
   }
 
-  // Lo disponible en despensa para esos nombres
+  // Lo disponible en despensa para esos nombres (del usuario)
   const nombresUnicos = [...new Set([...necesarios.keys()].map(k => k.split('|')[0]))];
   const { data: despensaRows } = await supabase
     .from('despensa')
     .select('id, nombre, cantidad, unidad, cantidad_total')
     .in('nombre', nombresUnicos)
-    .eq('usuario', usuario);
+    .eq('owner_id', uid);       // <<<<<<
 
   const disponibles = new Map();
   for (const d of (despensaRows || [])) {
@@ -213,7 +231,7 @@ async function verificarDespensaYActualizar() {
     disponibles.set(key, (disponibles.get(key) || 0) + cant);
   }
 
-  // Añadir faltantes (déficit redondeado al nº de packs necesarios)
+  // Añadir faltantes a lista_compra (usuario = owner_id)
   for (const [key, cantNecesaria] of necesarios.entries()) {
     const [nombre, uniBase] = key.split('|');
     const cantDisp = disponibles.get(key) || 0;
@@ -226,30 +244,30 @@ async function verificarDespensaYActualizar() {
     // tamaño de pack
     let pack = null;
 
-    // 1) intento coger pack de despensa (cantidad_total)
+    // 1) pack desde despensa
     const drow = (despensaRows || []).find(x => (x.nombre || '').toLowerCase() === nombre.toLowerCase());
     if (drow && drow.cantidad_total != null) {
       const conv = toBase(drow.cantidad_total, drow.unidad);
       if (conv.uni === uniBase) pack = conv.cant;
     }
 
-    // 2) si no hay, pack desde ingredientes_base
+    // 2) pack desde ingredientes_base
     const baseItem = ingBase.find(b => (b.description || b.nombre) === nombre);
     if (pack == null && baseItem && baseItem.cantidad != null) {
       const conv = toBase(baseItem.cantidad, baseItem.unidad);
       if (conv.uni === uniBase) pack = conv.cant;
     }
 
-    // 3) última opción: compra exactamente el déficit
+    // 3) si no hay pack, compra exactamente el déficit
     if (!Number.isFinite(pack) || pack <= 0) pack = deficit;
 
     const cantidadFinal = Math.ceil(deficit / pack) * pack;
 
     await supabase.from('lista_compra').insert({
       nombre,
-      usuario,
-      unidad:  uniBase,        // 'g' / 'ml' / 'ud'
-      cantidad: cantidadFinal, // déficit redondeado a packs
+      owner_id: uid,        // <<<<<<
+      unidad:  uniBase,
+      cantidad: cantidadFinal,
       completado: false
     });
 
@@ -261,11 +279,16 @@ async function verificarDespensaYActualizar() {
 }
 
 async function rellenarCantidadTotalEnDespensa() {
-  // Rellena cantidad_total en despensa con el “pack” del ingrediente base si está a null
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) return;
+
   const { data: despensa, error } = await supabase
     .from('despensa')
-    .select('id, nombre')
-    .is('cantidad_total', null);
+     .select('id, nombre')
+ .or('cantidad_total.is.null')
+ .eq('owner_id', uid);
+
   if (error || !despensa?.length) return;
 
   for (const item of despensa) {
@@ -274,12 +297,15 @@ async function rellenarCantidadTotalEnDespensa() {
       .from('ingredientes_base')
       .select('cantidad, unidad')
       .eq('nombre', nombre)
+      .eq('owner_id', uid)  // << y este, por coherencia
       .maybeSingle();
+
     if (!base) continue;
 
     await supabase
       .from('despensa')
       .update({ cantidad_total: base.cantidad })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('owner_id', uid); // << por seguridad
   }
 }

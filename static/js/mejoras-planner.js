@@ -2,7 +2,7 @@ import { supabase } from './supabaseClient.js';
 
 /**
  * Planificador diario de mejoras
- * - No duplica porque usa onConflict (improvement_id, due_date)
+ * - No duplica porque usa onConflict (improvement_id, due_date, owner_id)
  * - Respeta presupuestoMin y maxTareas
  * - Opcional: cuotasPorCategoria { "Código": 30, "Casa": 20, ... } en %
  */
@@ -10,37 +10,38 @@ export async function planificarMejorasHoy({
   presupuestoMin = 60,
   bloquesPermitidos = [25, 15, 45],
   maxTareas = 4,
-  cuotasPorCategoria = null // e.g. { "Código": 40, "Lectura": 30, "Casa": 30 }
+  cuotasPorCategoria = null
 } = {}) {
-  const usuario = localStorage.getItem('usuario_actual') || 'desconocido';
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id || null;
+  if (!uid) return { planned: 0, reason: 'no_user' };
+
   const hoyStr = new Date().toISOString().split('T')[0];
 
-  // 0) Evitar replanificar en el mismo día si ya hay algo planificado
-  //    No es estrictamente necesario por el UNIQUE, pero ahorra trabajo.
+  // 0) ¿Ya hay planificadas hoy (con improvement_id) para este usuario?
   const { data: yaHay, error: errYaHay } = await supabase
     .from('tasks')
     .select('id')
-    .eq('usuario', usuario)
+    .eq('owner_id', uid)
     .eq('due_date', hoyStr)
-    .not('improvement_id', 'is', null)
-    .limit(1);
+    .not('improvement_id', 'is', null);     // NO usar .is(null) → evita ...is.null
 
-  if (!errYaHay && yaHay && yaHay.length > 0) {
+  if (!errYaHay && Array.isArray(yaHay) && yaHay.length > 0) {
     return { planned: 0, reason: 'already_planned_today' };
   }
 
-  // 1) Leer backlog activo
+  // 1) Backlog activo del usuario
   const { data: mejoras, error } = await supabase
     .from('mejoras')
     .select('*')
-    .eq('usuario', usuario)
+    .eq('owner_id', uid)
     .eq('is_active', true);
 
   if (error || !Array.isArray(mejoras) || mejoras.length === 0) {
     return { planned: 0, reason: 'no_backlog' };
   }
 
-  // 2) Filtrar por cooldown: si last_done_at + cooldown > hoy -> saltar
+  // 2) Cooldown
   const hoy = new Date(hoyStr);
   const candidatas = mejoras.filter(m => {
     if (!m.cooldown_dias || m.cooldown_dias <= 0 || !m.last_done_at) return true;
@@ -49,28 +50,23 @@ export async function planificarMejorasHoy({
     nextAllowed.setDate(nextAllowed.getDate() + m.cooldown_dias);
     return nextAllowed <= hoy;
   });
-
   if (candidatas.length === 0) return { planned: 0, reason: 'cooldown_all' };
 
-  // 3) Scoring simple
+  // 3) Scoring
   const scoreDe = (m) => {
-    const prioridad = Number(m.prioridad || 3); // 1..5
-    // días desde última vez hecha
+    const prioridad = Number(m.prioridad || 3);
     let diasIdle = 999;
     if (m.last_done_at) {
       const last = new Date(m.last_done_at);
       diasIdle = Math.max(0, Math.round((hoy - last) / (1000 * 60 * 60 * 24)));
     }
-    // penalizar si fue ayer
     const penalAyer = (diasIdle === 0) ? -5 : 0;
-    const jitter = Math.random(); // romper empates
+    const jitter = Math.random();
     return prioridad * 10 + diasIdle + penalAyer + jitter;
   };
-
-  // 4) Ordenar por score desc
   candidatas.sort((a, b) => scoreDe(b) - scoreDe(a));
 
-  // 5) Selección por presupuesto + cuotas + bloques permitidos
+  // 5) Selección por presupuesto/cuotas/bloques
   const minutosPorCategoria = {};
   const metaPorCategoria = {};
   if (cuotasPorCategoria && typeof cuotasPorCategoria === 'object') {
@@ -84,30 +80,25 @@ export async function planificarMejorasHoy({
 
   let restante = presupuestoMin;
   const elegidas = [];
-
   for (const m of candidatas) {
-    if (elegidas.length >= maxTareas) break;
-    if (restante <= 0) break;
-
+    if (elegidas.length >= maxTareas || restante <= 0) break;
     const bloque = Number(m.esfuerzo_min || 25);
-    if (!bloquesPermitidos.includes(bloque)) continue; // si no está permitido, saltar
+    if (!bloquesPermitidos.includes(bloque)) continue;
     if (bloque > restante) continue;
 
-    // comprobar cuota
-    if (metaPorCategoria && Object.keys(metaPorCategoria).length > 0) {
+    if (Object.keys(metaPorCategoria).length) {
       const cat = m.categoria || 'General';
       const usado = minutosPorCategoria[cat] || 0;
-      const meta = metaPorCategoria[cat] ?? presupuestoMin; // si no hay cuota para esa cat, sin límite
+      const meta = metaPorCategoria[cat] ?? presupuestoMin;
       if (usado + bloque > meta) {
-        // si excede su cuota, solo la aceptamos si no hay otras dentro de cuota
-        // (regla simple: dejamos pasar una por categoría si no hemos llenado presupuesto con nadie)
         const hayOtraEnCuota = candidatas.some(x => {
           if (x === m) return false;
           const cat2 = x.categoria || 'General';
           const usado2 = minutosPorCategoria[cat2] || 0;
           const meta2 = metaPorCategoria[cat2] ?? presupuestoMin;
           const bloque2 = Number(x.esfuerzo_min || 25);
-          return bloquesPermitidos.includes(bloque2) && bloque2 <= restante && (usado2 + bloque2) <= meta2 && !elegidas.includes(x);
+          return bloquesPermitidos.includes(bloque2) && bloque2 <= restante &&
+                 (usado2 + bloque2) <= meta2 && !elegidas.includes(x);
         });
         if (hayOtraEnCuota) continue;
       }
@@ -120,9 +111,9 @@ export async function planificarMejorasHoy({
 
   if (elegidas.length === 0) return { planned: 0, reason: 'no_fit_budget' };
 
-  // 6) Crear/actualizar tareas de hoy (upsert por improvement_id+due_date)
+  // 6) Upsert de tareas (clave por improvement_id + due_date + owner_id)
   const rows = elegidas.map(m => ({
-    usuario,
+    owner_id: uid,
     description: `[Mejora] ${m.titulo}`,
     due_date: hoyStr,
     is_completed: false,
@@ -132,19 +123,20 @@ export async function planificarMejorasHoy({
 
   const { error: upErr } = await supabase
     .from('tasks')
-    .upsert(rows, { onConflict: 'improvement_id,due_date' });
+    .upsert(rows, { onConflict: 'improvement_id,due_date,owner_id' });
 
   if (upErr) {
     console.error('❌ Error planificando mejoras:', upErr);
     return { planned: 0, reason: 'upsert_error' };
   }
 
-  // (opcional) Marcar last_planned_at en mejoras elegidas
+  // 7) last_planned_at en mejoras del usuario
   const idsElegidas = elegidas.map(m => m.id);
   const { error: updErr } = await supabase
     .from('mejoras')
     .update({ last_planned_at: hoyStr })
-    .in('id', idsElegidas);
+    .in('id', idsElegidas)
+    .eq('owner_id', uid);
   if (updErr) console.warn('⚠️ No se pudo actualizar last_planned_at:', updErr);
 
   return { planned: rows.length, reason: 'ok' };
