@@ -245,14 +245,19 @@ function parseIntent(transcript){
 
     // Chrome corta al detectar silencio: re-arrancar si el modal sigue abierto
     recognition.onend = () => {
-      if (keepListening && modal.classList.contains('show')) {
-        try { recognition.start(); } catch {}
-      } else {
-        escuchando = false;
-        liveBox.classList.remove('listening');
-        micBtn?.classList.remove('grabando');
-      }
-    };
+  const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+
+  if (!isMobile && keepListening && modal.classList.contains('show')) {
+    // En PC: reinicia automáticamente para modo continuo
+    try { recognition.start(); } catch {}
+  } else {
+    // En móvil: no reinicia → se evita el pitido y la repetición
+    escuchando = false;
+    liveBox.classList.remove('listening');
+    micBtn?.classList.remove('grabando');
+  }
+};
+
 
     try { recognition.start(); } catch {}
     escuchando = true;
