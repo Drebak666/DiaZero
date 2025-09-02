@@ -1,6 +1,7 @@
+// mejoras-planner.js — v2 (anti 400 en /rest/v1/mejoras)
 import { supabase } from './supabaseClient.js';
 
-// Espera a que Supabase restaure la sesión (parpadeo inicial de algunos navegadores)
+// Espera a que Supabase restaure la sesión (algunos navegadores tardan un pelín)
 async function ensureSessionReady() {
   try { await supabase.auth.getSession(); } catch {}
   await new Promise(r => setTimeout(r, 50));
@@ -20,7 +21,9 @@ export async function planificarMejorasHoy({
 } = {}) {
   await ensureSessionReady();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // 🔐 Anti-400: no consultes si no hay UID
+  const { data: { user }, error: uerr } = await supabase.auth.getUser();
+  if (uerr) return { planned: 0, reason: 'auth_error' };
   const uid = user?.id || null;
   if (!uid) return { planned: 0, reason: 'no_user' };
 
@@ -32,13 +35,13 @@ export async function planificarMejorasHoy({
     .select('id')
     .eq('owner_id', uid)
     .eq('due_date', hoyStr)
-    .not('improvement_id', 'is', null); // evita ...is.null
+    .not('improvement_id', 'is', null); // genera not.is.null
 
   if (!errYaHay && Array.isArray(yaHay) && yaHay.length > 0) {
     return { planned: 0, reason: 'already_planned_today' };
   }
 
-  // 1) Backlog activo del usuario
+  // 1) Backlog activo del usuario (⚠️ siempre filtrado por uid)
   const { data: mejoras, error } = await supabase
     .from('mejoras')
     .select('*')
@@ -119,7 +122,7 @@ export async function planificarMejorasHoy({
 
   if (elegidas.length === 0) return { planned: 0, reason: 'no_fit_budget' };
 
-  // 6) Upsert de tareas (clave por improvement_id + due_date + owner_id)
+  // 6) Upsert de tareas (clave compuesta: improvement_id + due_date + owner_id)
   const rows = elegidas.map(m => ({
     owner_id: uid,
     description: `[Mejora] ${m.titulo}`,
@@ -138,7 +141,7 @@ export async function planificarMejorasHoy({
     return { planned: 0, reason: 'upsert_error' };
   }
 
-  // 7) last_planned_at en mejoras del usuario
+  // 7) Marca last_planned_at en mejoras del usuario
   const idsElegidas = elegidas.map(m => m.id);
   const { error: updErr } = await supabase
     .from('mejoras')

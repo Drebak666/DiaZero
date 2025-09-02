@@ -1,6 +1,70 @@
 // static/js/main.js
 import { supabase } from './supabaseClient.js';
 
+// Normaliza unidades a base (g, ml, ud)
+function toBase(cant, uni) {
+  const n = parseFloat(cant) || 0;
+  const u = (uni || '').toLowerCase();
+  if (u === 'kg') return { cant: n * 1000, uni: 'g' };
+  if (u === 'g')  return { cant: n,       uni: 'g' };
+  if (u === 'l')  return { cant: n * 1000, uni: 'ml' };
+  if (u === 'ml') return { cant: n,        uni: 'ml' };
+  return { cant: n, uni: 'ud' };
+}
+function fromBase(n, baseUni, targetUni) {
+  const u = (targetUni || '').toLowerCase();
+  if (baseUni === 'g'  && u === 'kg') return n / 1000;
+  if (baseUni === 'ml' && u === 'l')  return n / 1000;
+  return n; // g→g, ml→ml, ud→ud
+}
+
+// Devuelve la cantidad mínima (en unidad base) que cubre el déficit usando packs disponibles.
+// Minimiza: 1) exceso sobre el déficit, 2) nº de packs, 3) prefiere packs pequeños en empates.
+function cubrirMinimo(deficitBase, packsBase) {
+  packsBase = [...new Set(packsBase.filter(x => x > 0))].sort((a,b)=>a-b);
+  if (!packsBase.length) return Math.ceil(deficitBase); // sin info: compra justo lo necesario
+
+  const maxPack = packsBase[packsBase.length - 1];
+  const LIM = deficitBase + maxPack; // margen para superar déficit
+  const INF = 1e15;
+
+  // DP: best[x] = [exceso, numPacks, ultimoPack] para conseguir cantidad x (base)
+  const best = Array(LIM + 1).fill(null);
+  best[0] = [deficitBase, 0, -1]; // a 0 le falta deficitBase (exceso considerado como "faltante")
+
+  for (let x = 0; x <= LIM; x++) {
+    if (!best[x]) continue;
+    for (const p of packsBase) {
+      const y = x + p;
+      if (y > LIM) continue;
+      const exceso = Math.max(0, y - deficitBase);
+      const cand = [exceso, best[x][1] + 1, p];
+      const cur  = best[y];
+
+      // orden lexicográfico: menor exceso, luego menos packs, luego pack más pequeño
+      const mejor = !cur ||
+        cand[0] < cur[0] ||
+        (cand[0] === cur[0] && cand[1] < cur[1]) ||
+        (cand[0] === cur[0] && cand[1] === cur[1] && cand[2] < cur[2]);
+
+      if (mejor) best[y] = cand;
+    }
+  }
+
+  // elegir el y con mejor (exceso, packs, pack pequeño)
+  let yBest = -1, meta = [INF, INF, INF];
+  for (let y = deficitBase; y <= LIM; y++) {
+    if (!best[y]) continue;
+    const cand = best[y];
+    const mejor = cand[0] < meta[0] ||
+                 (cand[0] === meta[0] && cand[1] < meta[1]) ||
+                 (cand[0] === meta[0] && cand[1] === meta[1] && cand[2] < meta[2]);
+    if (mejor) { yBest = y; meta = cand; }
+  }
+  return yBest > 0 ? yBest : Math.ceil(deficitBase);
+}
+
+
 // Espera a que Supabase restaure la sesión (evita “Failed to fetch” y datos vacíos en primera carga)
 async function ensureSessionReady() {
   try { await supabase.auth.getSession(); } catch {}
@@ -119,21 +183,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-// 2) index.html → en la rama VOZ type==='compra'
-// Sustituye el bloque donde calculas owner_id por este (antes de insertar)
-let owner_id = null;
-try { owner_id = (await sb.auth.getUser())?.data?.user?.id || null; } catch {}
-if (!owner_id) {
-  const username = localStorage.getItem('usuario_actual');
-  if (username) {
-    const { data: u } = await sb.from('usuarios').select('id').eq('username', username).maybeSingle();
-    owner_id = u?.id || null;
-  }
-}
-rows.forEach(r => { r.owner_id = owner_id; r.completado = false; });
-
-// (y tras insertar) añade
-window.updateShoppingBadge?.();
 
 
 
@@ -146,14 +195,14 @@ async function verificarDespensaYActualizar() {
 
   let añadidos = 0;
 
-  // A) evitar duplicados en lista_compra (pendientes del usuario)
-  const { data: listaActual } = await supabase
-    .from('lista_compra')
-    .select('id, nombre, completado')
-    .eq('owner_id', uid)
-    .eq('completado', false);
+// A) evitar duplicados en lista_compra (pendientes del usuario)
+const { data: listaActual } = await supabase
+  .from('lista_compra')
+  .select('id, nombre, completado')
+  .eq('owner_id', uid); // ← quita el filtro .eq('completado', false)
 
-  const yaEnLista = new Set((listaActual || []).map(i => (i.nombre || '').toLowerCase().trim()));
+const yaEnLista = new Set((listaActual || []).map(i => (i.nombre || '').toLowerCase().trim()));
+
 
   // B) STOCK BAJO GLOBAL (<15% del pack)
   const { data: despensaAll } = await supabase
@@ -186,10 +235,11 @@ async function verificarDespensaYActualizar() {
   const hoy = new Date().toISOString().split('T')[0];
 
   const { data: comidasDia, error: errComidas } = await supabase
-    .from('comidas_dia')
-    .select('receta_id, personas')
-    .eq('fecha', hoy)
-    .eq('owner_id', uid);
+  .from('comidas_dia')
+  .select('receta_id, personas')
+  .eq('fecha', hoy)
+  .or(`owner_id.eq.${uid},owner_id.is.null`);
+
   if (errComidas || !comidasDia?.length) return añadidos;
 
   const recetaIds = [...new Set(comidasDia.map(c => c.receta_id))];
@@ -279,7 +329,8 @@ async function verificarDespensaYActualizar() {
     }
 
     // 2) pack desde ingredientes_base
-    const baseItem = ingBase.find(b => (b.description || b.nombre) === nombre);
+const norm = s => (s || '').toLowerCase().trim();
+const baseItem = ingBase.find(b => norm(b.description || b.nombre) === norm(nombre));
     if (pack == null && baseItem && baseItem.cantidad != null) {
       const conv = toBase(baseItem.cantidad, baseItem.unidad);
       if (conv.uni === uniBase) pack = conv.cant;
@@ -310,29 +361,65 @@ async function rellenarCantidadTotalEnDespensa() {
   const uid = user?.id;
   if (!uid) return;
 
-  const { data: despensa, error } = await supabase
+  // Items de despensa sin capacidad registrada
+  const { data: despensa } = await supabase
     .from('despensa')
-    .select('id, nombre')
-    .or('cantidad_total.is.null')
+    .select('id, nombre, unidad')
+    .is('cantidad_total', null)       // <- más claro que .or('cantidad_total.is.null')
     .eq('owner_id', uid);
 
-  if (error || !despensa?.length) return;
+  if (!despensa?.length) return;
+
+  // conversor simple a unidad base
+  const toBase = (cant, uni) => {
+    const n = parseFloat(cant) || 0;
+    const u = (uni || '').toLowerCase();
+    if (u === 'kg') return { cant: n * 1000, uni: 'g' };
+    if (u === 'g')  return { cant: n,       uni: 'g' };
+    if (u === 'l')  return { cant: n * 1000, uni: 'ml' };
+    if (u === 'ml') return { cant: n,        uni: 'ml' };
+    return { cant: n, uni: 'ud' }; // por defecto
+  };
 
   for (const item of despensa) {
-    const { id, nombre } = item;
-    const { data: base } = await supabase
+    const { id, nombre, unidad: uniDesp } = item;
+
+    // 1º buscar por nombre exacto
+    let { data: base } = await supabase
       .from('ingredientes_base')
-      .select('cantidad, unidad')
+      .select('cantidad, unidad, nombre, description')
+      .eq('owner_id', uid)
       .eq('nombre', nombre)
-      .eq('owner_id', uid)  // coherencia multicuenta
       .maybeSingle();
 
-    if (!base) continue;
+    // 2º si no hay, intentar por description
+    if (!base) {
+      const alt = await supabase
+        .from('ingredientes_base')
+        .select('cantidad, unidad, nombre, description')
+        .eq('owner_id', uid)
+        .eq('description', nombre)
+        .maybeSingle();
+      base = alt.data || null;
+    }
+
+    if (!base || base.cantidad == null) continue;
+
+    // Solo fijar cantidad_total si las unidades son comparables
+    const b = toBase(base.cantidad, base.unidad);
+    const d = toBase(1, uniDesp); // solo para saber la unidad base de despensa
+
+    if (b.uni !== d.uni) {
+      // Unidades incompatibles: lo dejamos para que lo ajustes manualmente
+      continue;
+    }
 
     await supabase
       .from('despensa')
-      .update({ cantidad_total: base.cantidad })
+.update({ cantidad_total: b.cant }) // b.cant ya está en 'g' o 'ml' como d.uni
       .eq('id', id)
       .eq('owner_id', uid);
   }
 }
+
+window.verificarDespensaYActualizar = verificarDespensaYActualizar;

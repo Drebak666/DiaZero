@@ -295,6 +295,8 @@
 <div class="form-modal oculto" id="modal-compartir">
   <form id="form-compartir">
     <h3>Compartir</h3>
+    <!-- 👇 AÑADE ESTE HIDDEN -->
+    <input type="hidden" id="share-ids" />
     <input type="hidden" id="share-id" />
 
     <div class="form-grid-2cols">
@@ -342,6 +344,9 @@
       <a class="icon-button" href="/registro"><i class="fas fa-clipboard-check"></i><span>Registro</span></a>
       <a class="icon-button" href="/calendario"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
       <a class="icon-button" href="/ejercicio"><i class="fas fa-dumbbell"></i><span>Ejercicio</span></a>
+      <a class="icon-button" href="/contactos" id="btn-contactos" title="Contactos">
+  <i class="fas fa-address-book"></i><span>Contactos</span>
+</a>
 
       <!-- ====== SCRIPTS ====== -->
 
@@ -992,6 +997,20 @@ rows.forEach(r => { r.owner_id = owner_id; r.completado = false; });
 })();
 </script>
 
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    window.verificarDespensaYActualizar?.();
+  });
+</script>
+<script>
+  // Recalcular lista de la compra cuando cambie stock o nº de personas
+  window.addEventListener('despensa-cambiada', () => {
+    window.verificarDespensaYActualizar?.();
+  });
+  window.addEventListener('personas-cambiadas', () => {
+    window.verificarDespensaYActualizar?.();
+  });
+</script>
 
 
 </body>

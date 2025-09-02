@@ -37,11 +37,13 @@ function setFrame(url, replace=false) {
 })();
 
 // Back/forward
+// Back/forward (reusa setFrame para garantizar plain=1 y sincronizar header)
 window.addEventListener('popstate', () => {
   const u = new URL(window.location.href);
   const to = u.searchParams.get('to') || '/?plain=1';
-  if (frame) frame.src = to;
+  setFrame(to, true);
 });
+
 
 // Clicks en el header del shell (si lo dejas visible)
 document.addEventListener('click', (e) => {

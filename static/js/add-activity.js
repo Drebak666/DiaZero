@@ -792,13 +792,16 @@ if (tipoSeleccionado === 'Ingrediente') {
     // Guarda histórico de precio por supermercado (si hay datos)
 if (baseId && (precio != null || (supermercado && supermercado.trim()))) {
   await supabase
-    .from('ingredientes_supermercado')
-    .insert([{
-      ingrediente_id: baseId,
-      supermercado: supermercado || null,
-      precio: precio,
-      fecha_precio: new Date().toISOString(),
-    }]);
+  .from('ingredientes_supermercado')
+  .insert([{
+    ingrediente_id: baseId,
+    supermercado: supermercado || null,
+    precio: precio,
+    cantidad: cantidad ?? null,   // ← añade cantidad
+    unidad:   unidad   || null,   // ← añade unidad
+    fecha_precio: new Date().toISOString(),
+  }]);
+
 }
 
 

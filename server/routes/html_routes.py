@@ -25,6 +25,9 @@ def calendario():
 def gestor_actividades():
     return render_template('gestor_actividades.html')
 
+@html_bp.route('/contactos')
+def contactos():
+    return render_template('contactos.html')
         
     
 @html_bp.route('/citas')

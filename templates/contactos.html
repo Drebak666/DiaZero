@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <title>Contactos — Mi Agenda</title>
+
+  <!-- Iconos + estilos de tu app -->
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link crossorigin="anonymous" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" rel="stylesheet"/>
+  <link href="/static/css/style.css" rel="stylesheet"/>
+
+  <!-- Estilos mínimos específicos (respetuosos con tu tema) -->
+  <style>
+    :root { --blk:#0f172a; --blk2:#111827; --txt:#e5e7eb; --mut:#94a3b8; --acc:#00f5ff; }
+    body{ background:#0b1220; color:var(--txt); }
+    header{ margin:18px 0 8px; text-align:center; }
+    .page-wrap{ max-width:900px; margin:0 auto; padding:10px 14px 60px; }
+    .toolbar{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:12px 0 18px; }
+    .toolbar .search{ flex:1; min-width:220px; }
+    .search input{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid #243146; background:#0f172a; color:var(--txt); }
+    .select, .btn, .chip{ border:1px solid #22314a; background:#0f172a; color:var(--txt); border-radius:10px; padding:8px 10px; }
+    .btn{ cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+    .btn:hover{ background:#152237; }
+    .btn.primary{ border-color:#0ea5e9; }
+    .btn.danger{ border-color:#ef4444; }
+    .btn.flat{ border:none; background:transparent; padding:6px; }
+    .grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:12px; }
+    .card{ background:linear-gradient(180deg, #0f172a, #0b1323); border:1px solid rgba(255,255,255,.06); border-radius:14px; padding:12px; display:flex; gap:12px; }
+    .avatar{ width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#111b33; border:1px solid rgba(255,255,255,.08); font-weight:700; letter-spacing:.5px; }
+    .card h3{ margin:0; font-size:1rem; }
+    .row{ display:flex; align-items:center; gap:8px; color:var(--mut); font-size:.95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .row a{ color:inherit; text-decoration:none; }
+    .meta{ display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap; }
+    .chip{ font-size:.8rem; padding:4px 8px; border-radius:999px; }
+    .card-actions{ margin-left:auto; display:flex; align-items:center; gap:4px; }
+    .fav{ color:#fbbf24; }
+    .empty{ text-align:center; color:var(--mut); padding:32px 8px; border:1px dashed #23314a; border-radius:14px; }
+    .fab{ position:fixed; right:16px; bottom:calc(16px + env(safe-area-inset-bottom,0)); width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:#0ea5e9; color:white; border:none; box-shadow:0 10px 25px rgba(0,0,0,.35); cursor:pointer; z-index:999; }
+    .fab:hover{ filter:brightness(1.05); }
+    /* Modales */
+    .form-modal{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); z-index:1000; }
+    .form-modal.oculto{ display:none; }
+    .modal-card{ width:min(720px, 92vw); background:#0f172a; border:1px solid #23314a; border-radius:16px; padding:16px; }
+    .modal-card h3{ margin:0 0 8px; }
+    .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .form-grid .full{ grid-column:1 / -1; }
+    .form-group label{ display:block; font-size:.85rem; color:var(--mut); margin-bottom:6px; }
+    .form-group input, .form-group textarea, .form-group select{
+      width:100%; padding:10px 12px; border-radius:10px; border:1px solid #22314a; background:#0b1323; color:var(--txt);
+    }
+    .modal-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+    .oculto{ display:none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Cabecera con usuario -->
+  <header>
+    <span id="nombre-usuario" style="display:inline-block; width:100%; max-width:600px; padding:10px; background:#0f172a; border:2px solid #00f5ff; border-radius:8px; color:white; font-weight:bold;">
+      Usuario
+    </span>
+  </header>
+
+  <div class="page-wrap">
+    <!-- Barra de herramientas -->
+    <div class="toolbar">
+      <div class="search">
+        <input id="q" type="search" placeholder="Buscar por nombre, teléfono, email o etiqueta…" autocomplete="off">
+      </div>
+      <select id="f-etiqueta" class="select" title="Filtrar por etiqueta">
+        <option value="">Todas las etiquetas</option>
+      </select>
+      <label class="btn flat" title="Solo favoritos">
+        <input id="f-favs" type="checkbox" style="accent-color:#fbbf24; margin-right:6px;">
+        ⭐ Favoritos
+      </label>
+      <button id="btn-export" class="btn" title="Exportar CSV"><i class="fa-solid fa-file-export"></i> Exportar</button>
+      <button id="btn-import" class="btn" title="Importar CSV"><i class="fa-solid fa-file-import"></i> Importar</button>
+      <a class="btn" href="/" title="Volver a inicio"><i class="fa-solid fa-house"></i> Inicio</a>
+    </div>
+
+    <!-- Lista -->
+    <div id="list" class="grid"></div>
+    <div id="empty" class="empty oculto">Sin contactos. Pulsa “+” para crear el primero.</div>
+  </div>
+
+  <!-- Botón flotante “Añadir” -->
+  <button id="fab" class="fab" title="Nuevo contacto"><i class="fa-solid fa-plus"></i></button>
+
+  <!-- Modal: Crear/Editar -->
+  <div id="modal" class="form-modal oculto" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+    <div class="modal-card">
+      <h3 id="dlg-title"><span id="dlg-mode">Nuevo</span> contacto</h3>
+      <form id="form">
+        <input type="hidden" id="id">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="nombre">Nombre*</label>
+            <input id="nombre" type="text" required placeholder="Ej: Ana Pérez">
+          </div>
+          <div class="form-group">
+            <label for="etiqueta">Etiqueta</label>
+            <input id="etiqueta" type="text" placeholder="Ej: familia, trabajo…">
+          </div>
+          <div class="form-group">
+            <label for="telefono">Teléfono</label>
+            <input id="telefono" type="tel" inputmode="tel" placeholder="+34 612 345 678">
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input id="email" type="email" inputmode="email" placeholder="ana@ejemplo.com">
+          </div>
+          <div class="form-group full">
+            <label for="notas">Notas</label>
+            <textarea id="notas" rows="3" placeholder="Notas útiles (cumpleaños, relación, dirección…)"></textarea>
+          </div>
+          <div class="form-group full">
+            <label><input type="checkbox" id="favorito" style="accent-color:#fbbf24; margin-right:6px;"> ⭐ Marcar como favorito</label>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="cancelar">Cancelar</button>
+          <button type="submit" class="btn primary"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Supabase y utilidades comunes -->
+  <script src="{{ url_for('static', filename='js/supabaseClient.js') }}" type="module"></script>
+  <script type="module">
+    import { supabase, getUID } from "{{ url_for('static', filename='js/supabaseClient.js') }}";
+
+    // ---------- Estado ----------
+    let USERNAME = localStorage.getItem('usuario_actual') || localStorage.getItem('username') || 'Usuario';
+    document.getElementById('nombre-usuario').textContent = USERNAME;
+
+    await getUID(); // deja window.UID listo si lo usas en tu backend
+    let owner_id = null;
+    try { owner_id = (await supabase.auth.getUser())?.data?.user?.id || null; } catch {}
+
+    const $ = (s, p=document) => p.querySelector(s);
+    const $$ = (s, p=document) => Array.from(p.querySelectorAll(s));
+
+    const els = {
+      list: $('#list'),
+      empty: $('#empty'),
+      q: $('#q'),
+      fEtiqueta: $('#f-etiqueta'),
+      fFavs: $('#f-favs'),
+      fab: $('#fab'),
+      modal: $('#modal'),
+      form: $('#form'),
+      id: $('#id'),
+      nombre: $('#nombre'),
+      etiqueta: $('#etiqueta'),
+      telefono: $('#telefono'),
+      email: $('#email'),
+      notas: $('#notas'),
+      favorito: $('#favorito'),
+      dlgMode: $('#dlg-mode'),
+      cancelar: $('#cancelar'),
+      export: $('#btn-export'),
+      import: $('#btn-import'),
+    };
+
+    // ---------- Helpers ----------
+    const trim = s => (s||'').trim();
+    const initials = (name='') => {
+      const p = trim(name).toUpperCase().split(/\s+/).filter(Boolean);
+      return (p[0]?.[0] || '') + (p[1]?.[0] || '');
+    };
+    const norm = s => (s||'').toLowerCase();
+
+    function applyFilters(rows){
+      const q = norm(els.q.value);
+      const tag = trim(els.fEtiqueta.value);
+      const fav = els.fFavs.checked;
+
+      return rows.filter(r => {
+        if (fav && !r.favorito) return false;
+        if (tag && norm(r.etiqueta) !== norm(tag)) return false;
+        if (!q) return true;
+        const hay = [r.nombre, r.telefono, r.email, r.etiqueta].some(v => norm(v).includes(q));
+        return hay;
+      });
+    }
+
+    function setModal(open){
+      els.modal.classList.toggle('oculto', !open);
+      if (open) els.nombre.focus();
+    }
+
+    function resetForm(){
+      els.id.value = '';
+      els.nombre.value = '';
+      els.telefono.value = '';
+      els.email.value = '';
+      els.etiqueta.value = '';
+      els.notas.value = '';
+      els.favorito.checked = false;
+    }
+
+    function fillForm(row){
+      els.id.value = row.id || '';
+      els.nombre.value = row.nombre || '';
+      els.telefono.value = row.telefono || '';
+      els.email.value = row.email || '';
+      els.etiqueta.value = row.etiqueta || '';
+      els.notas.value = row.notas || '';
+      els.favorito.checked = !!row.favorito;
+    }
+
+    function optionizeEtiquetas(rows){
+      const set = new Set(rows.map(r => trim(r.etiqueta)).filter(Boolean));
+      const cur = els.fEtiqueta.value;
+      els.fEtiqueta.innerHTML = `<option value="">Todas las etiquetas</option>` + 
+        Array.from(set).sort((a,b)=>a.localeCompare(b,'es'))
+          .map(e => `<option ${e===cur?'selected':''} value="${e}">${e}</option>`).join('');
+    }
+
+    function rowToCsv(r){
+      // Escapa comas, comillas y saltos
+      const esc = v => {
+        const s = (v ?? '').toString();
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+      };
+      return [r.nombre, r.telefono, r.email, r.etiqueta, r.favorito ? '1':'0', r.notas].map(esc).join(',');
+    }
+
+    function csvToRows(csv){
+      // Sencillo parser de CSV (comillas dobles)
+      const lines = csv.split(/\r?\n/).filter(l => l.trim().length);
+      // Si primera fila parece cabecera, la saltamos
+      if (/nombre\s*,/i.test(lines[0])) lines.shift();
+      const rows = [];
+      for (const line of lines){
+        // Split respetando comillas
+        const cols = [];
+        let cur='', inQ=false;
+        for (let i=0;i<line.length;i++){
+          const ch=line[i];
+          if (inQ){
+            if (ch==='"'){
+              if (line[i+1]==='"'){ cur+='"'; i++; } else { inQ=false; }
+            } else cur+=ch;
+          } else {
+            if (ch===','){ cols.push(cur); cur=''; }
+            else if (ch==='"'){ inQ=true; }
+            else cur+=ch;
+          }
+        }
+        cols.push(cur);
+        const [nombre, telefono, email, etiqueta, favorito, notas] = cols;
+        if (!trim(nombre)) continue;
+        rows.push({
+          nombre: trim(nombre),
+          telefono: trim(telefono),
+          email: trim(email),
+          etiqueta: trim(etiqueta),
+          favorito: favorito === '1' || /true/i.test(favorito || ''),
+          notas: trim(notas)
+        });
+      }
+      return rows;
+    }
+
+    // ---------- CRUD ----------
+    async function fetchAll(){
+      const { data, error } = await supabase
+        .from('contactos')
+        .select('*')
+        .eq('owner_id', owner_id)
+        .order('favorito', { ascending:false })
+        .order('nombre', { ascending:true });
+
+      if (error) { console.error(error); return []; }
+      return data || [];
+    }
+
+    async function upsert(row){
+  if (!trim(row.nombre)) throw new Error('El nombre es obligatorio');
+  row.owner_id = owner_id;
+
+  if (!row.id){
+    // 👇 añade esta línea
+    if (!row.id) row.id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+    const { error } = await supabase.from('contactos').insert([row]);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from('contactos')
+      .update(row).eq('id', row.id).eq('owner_id', owner_id);
+    if (error) throw error;
+  }
+}
+
+
+    async function remove(id){
+      const ok = confirm('¿Eliminar este contacto?');
+      if (!ok) return;
+      const { error } = await supabase.from('contactos').delete().eq('id', id).eq('owner_id', owner_id);
+      if (error) alert('No se pudo borrar: ' + error.message);
+    }
+
+    async function toggleFav(id, value){
+      const { error } = await supabase.from('contactos').update({ favorito: value }).eq('id', id).eq('owner_id', owner_id);
+      if (error) alert('No se pudo actualizar favorito: ' + error.message);
+    }
+
+    // ---------- Render ----------
+    let ALL = [];
+
+    function render(){
+      const rows = applyFilters(ALL);
+      optionizeEtiquetas(ALL);
+
+      els.list.innerHTML = rows.map(r => {
+        const ini = initials(r.nombre) || '👤';
+        const fav = r.favorito ? 'fav' : '';
+        const telHref = r.telefono ? `tel:${r.telefono.replace(/\s+/g,'')}` : '#';
+        const mailHref = r.email ? `mailto:${r.email}` : '#';
+        return `
+          <article class="card" data-id="${r.id}">
+            <div class="avatar">${ini}</div>
+            <div style="min-width:0; flex:1;">
+              <h3>${r.nombre}</h3>
+              <div class="row">${r.telefono ? `<i class="fa-solid fa-phone"></i> <a href="${telHref}">${r.telefono}</a>` : '<span class="muted">Sin teléfono</span>'}</div>
+              <div class="row">${r.email ? `<i class="fa-solid fa-envelope"></i> <a href="${mailHref}">${r.email}</a>` : '<span class="muted">Sin email</span>'}</div>
+              <div class="meta">
+                ${r.etiqueta ? `<span class="chip"><i class="fa-solid fa-tag"></i> ${r.etiqueta}</span>`:''}
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="btn flat btn-fav" title="${r.favorito?'Quitar de favoritos':'Marcar favorito'}"><i class="fa-star ${fav?'fa-solid fav':'fa-regular'}"></i></button>
+              <button class="btn flat btn-edit" title="Editar"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn flat btn-del"  title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      els.empty.classList.toggle('oculto', rows.length>0);
+
+      // Wire botones por tarjeta
+      $$('.card').forEach(card => {
+        const id = card.getAttribute('data-id');
+        card.querySelector('.btn-edit').addEventListener('click', () => {
+          const row = ALL.find(x=>x.id===id); if (!row) return;
+          els.dlgMode.textContent = 'Editar';
+          fillForm(row);
+          setModal(true);
+        });
+        card.querySelector('.btn-del').addEventListener('click', async () => {
+          await remove(id);
+          await reload();
+        });
+        card.querySelector('.btn-fav').addEventListener('click', async () => {
+          const row = ALL.find(x=>x.id===id); if (!row) return;
+          await toggleFav(id, !row.favorito);
+          await reload(/*preserveQ=*/true);
+        });
+      });
+    }
+
+    async function reload(preserveQ=false){
+      if (!preserveQ) els.q.value = els.q.value; // nada, pero mantiene UX
+      ALL = await fetchAll();
+      render();
+      document.dispatchEvent(new CustomEvent('contactos:cargados', { detail: { total: ALL.length }}));
+    }
+
+    // ---------- Import / Export ----------
+    els.export.addEventListener('click', () => {
+      const csv = ['nombre,telefono,email,etiqueta,favorito,notas']
+        .concat(ALL.map(rowToCsv))
+        .join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'contactos.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    els.import.addEventListener('click', () => {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = '.csv,text/csv';
+      inp.onchange = async () => {
+        const file = inp.files?.[0]; if (!file) return;
+        const text = await file.text();
+        const rows = csvToRows(text);
+        if (!rows.length) { alert('Archivo vacío o formato inválido.'); return; }
+        // Inserción en lote sencilla
+        const toInsert = rows.map(r => ({ ...r, owner_id }));
+        const { error } = await supabase.from('contactos').insert(toInsert);
+        if (error) return alert('Error importando: ' + error.message);
+        await reload();
+      };
+      inp.click();
+    });
+
+    // ---------- UI events ----------
+    els.fab.addEventListener('click', () => {
+      els.dlgMode.textContent = 'Nuevo';
+      resetForm();
+      setModal(true);
+    });
+
+    els.cancelar.addEventListener('click', () => setModal(false));
+    els.modal.addEventListener('click', (e) => { if (e.target === els.modal) setModal(false); });
+
+    els.q.addEventListener('input', render);
+    els.fEtiqueta.addEventListener('change', render);
+    els.fFavs.addEventListener('change', render);
+
+    els.form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const row = {
+          id: trim(els.id.value) || null,
+          nombre: trim(els.nombre.value),
+          telefono: trim(els.telefono.value),
+          email: trim(els.email.value),
+          etiqueta: trim(els.etiqueta.value),
+          notas: trim(els.notas.value),
+          favorito: !!els.favorito.checked
+        };
+        await upsert(row);
+        setModal(false);
+        await reload();
+      } catch (err) {
+        alert(err?.message || 'No se pudo guardar.');
+      }
+    });
+
+    // ---------- Realtime opcional ----------
+    try {
+      const ch = supabase.channel('rt-contactos')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'contactos', filter: owner_id ? `owner_id=eq.${owner_id}` : undefined }, () => reload(true))
+        .subscribe();
+      window.addEventListener('beforeunload', () => { try { supabase.removeChannel(ch); } catch {} });
+    } catch {}
+
+    // ---------- Arranque ----------
+    await reload();
+  </script>
+</body>
+</html>

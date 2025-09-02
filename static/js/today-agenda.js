@@ -62,12 +62,16 @@ async function cargarAgendaHoy() {
   let actividades = [];
 
   // 🔸 Planificar mejoras del día (idempotente por UNIQUE)
-  await planificarMejorasHoy({ presupuestoMin: 60, bloquesPermitidos: [25, 15], maxTareas: 4 });
+// 👤 UID del usuario autenticado
+const { data: { user } } = await supabase.auth.getUser();
+if (!user) { 
+  console.warn('[AGENDA] No hay usuario autenticado'); 
+  renderizarActividades([]); 
+  return; 
+}
+const uid = user.id;
 
-  // 👤 UID del usuario autenticado
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) { console.warn('[AGENDA] No hay usuario autenticado'); renderizarActividades([]); return; }
-  const uid = user.id;
+
 
 
 // --- LIMPIEZA/MOVIMIENTO AUTOMÁTICO ---

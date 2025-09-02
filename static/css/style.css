@@ -1795,3 +1795,13 @@ header {
 
 /* Estado del botón del micro */
 #mini-mic.grabando{ box-shadow:0 0 14px #2ee6ff; border-radius:9999px; }
+
+.btn-share {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  padding: 4px;
+}
+.btn-share i {
+  font-size: 14px;
+}

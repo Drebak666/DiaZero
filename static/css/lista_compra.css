@@ -592,3 +592,8 @@ select, option {
 .btn-inicio:hover {
   background: #1b5c99;
 }
+
+.tachado {
+  text-decoration: line-through;
+  opacity: 0.6;
+}

@@ -1,7 +1,5 @@
-// static/js/lista_compra.js (unificado con badge global)
-// - Inserta con completado:false
-// - Quita contador local y usa window.updateShoppingBadge?.()
-// - Llama al badge tras insertar/editar/borrar/tick/añadir a despensa
+// static/js/lista_compra.js — v10
+console.log('lista_compra v10');
 
 import { supabase } from './supabaseClient.js';
 import { getUsuarioActivo } from './usuario.js';
@@ -15,7 +13,7 @@ const supermercado2Select = document.getElementById('super2');
 const total1Span = document.getElementById('total-super1');
 const total2Span = document.getElementById('total-super2');
 
-// ================= Helpers sesión/uid =================
+// -------- Helpers sesión / uid
 async function getUidActual() {
   try { const { data: { user } } = await supabase.auth.getUser(); if (user?.id) return user.id; } catch {}
   try { const { data: { session } } = await supabase.auth.getSession(); if (session?.user?.id) return session.user.id; } catch {}
@@ -32,35 +30,95 @@ async function getUidActual() {
 const nrm = (s) => (s || '').toLowerCase().trim();
 const singular = (str) => String(str).replace(/(es|s)$/i, '');
 
-// ================= Añadir a la lista =================
+// ======================= Datalist con packs/precios (vista "ingredientes")
+const dl = document.createElement('datalist');
+dl.id = 'ingredientes-sugerencias';
+document.body.appendChild(dl);
+inputNombre?.setAttribute('list', dl.id);
+
+function debounce(fn, ms = 150) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// Mapa: texto mostrado -> { nombre, packCant, packUnd, supermercado, precio }
+const sugerenciasMap = new Map();
+
+const actualizarSugerencias = debounce(async () => {
+  const q = (inputNombre.value || '').trim();
+  if (!q) { dl.innerHTML = ''; sugerenciasMap.clear(); return; }
+
+  // Vista "ingredientes" (base + supermercado + último precio por pack)
+  const { data: rows, error } = await supabase
+    .from('ingredientes')
+    .select('description, supermercado, precio, cantidad, unidad, fecha_precio')
+    .ilike('description', `%${q}%`)
+    .order('fecha_precio', { ascending: false })
+    .limit(50);
+
+  dl.innerHTML = '';
+  sugerenciasMap.clear();
+  if (error || !Array.isArray(rows)) return;
+
+  const seen = new Set();
+  for (const r of rows) {
+    const nombre   = (r.description || '').trim();
+    const packCant = r.cantidad;
+    const packUnd  = r.unidad;
+    const superm   = r.supermercado || '';
+    const etiqueta = (packCant && packUnd)
+      ? `${nombre} — ${packCant} ${packUnd} (${superm}) ${Number(r.precio).toFixed(2)}€`
+      : `${nombre}`;
+    if (seen.has(etiqueta)) continue;
+    seen.add(etiqueta);
+
+    const opt = document.createElement('option');
+    opt.value = etiqueta; // Chrome muestra el value
+    dl.appendChild(opt);
+
+    sugerenciasMap.set(etiqueta, {
+      nombre,
+      packCant: packCant || null,
+      packUnd:  packUnd  || null,
+      supermercado: superm || null,
+      precio: r.precio ?? null
+    });
+  }
+}, 150);
+
+inputNombre?.addEventListener('input', actualizarSugerencias);
+
+// ======================= Añadir a la lista (no trocear nombres largos)
 form?.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const texto = nrm(inputNombre.value);
+  const texto = (inputNombre.value || '').trim();
   if (!texto) return;
 
   const uid = await getUidActual();
-  const { data: cat } = await supabase.from('ingredientes_base').select('nombre');
-  const existentes = new Set((cat || []).map(r => singular(nrm(r.nombre))));
 
-  const palabras = texto.split(/\s+/);
-  const resultado = [];
-  for (let i = 0; i < palabras.length; ) {
-    let match = null, len = 0;
-    for (let L = 3; L >= 1; L--) {
-      const grupo = palabras.slice(i, i + L).join(' ');
-      const key = singular(nrm(grupo));
-      if (existentes.has(key)) { match = grupo; len = L; break; }
-    }
-    if (match) { resultado.push(match); i += len; continue; }
-    if (i + 2 < palabras.length && ['de','del','con','sin'].includes(palabras[i+1])) {
-      resultado.push(`${palabras[i]} ${palabras[i+1]} ${palabras[i+2]}`); i += 3; continue;
-    }
-    resultado.push(palabras[i]); i++;
-  }
+  // Solo separa por comas o conjunción (y/e)
+  const partes = texto
+    .replace(/\s+y\s+|\s+e\s+/gi, ',')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
 
-  const nombres = [...new Set(resultado.map(s => s.trim()).filter(Boolean))];
-  for (const nombre of nombres) {
-    await supabase.from('lista_compra').insert([{ nombre, owner_id: uid || null, completado: false }]);
+  for (const raw of partes) {
+    const sug = sugerenciasMap.get(raw);
+    const nombre = sug?.nombre || raw;
+
+    const insert = {
+      nombre,
+      owner_id: uid || null,
+      completado: false
+    };
+
+    // Si el usuario eligió una opción del datalist con pack, la guardamos
+    if (sug?.packCant && sug?.packUnd) {
+      insert.cantidad = sug.packCant;
+      insert.unidad   = sug.packUnd;
+    }
+
+    await supabase.from('lista_compra').insert([insert]);
   }
 
   inputNombre.value = '';
@@ -69,13 +127,42 @@ form?.addEventListener('submit', async (e) => {
   window.updateShoppingBadge?.();
 });
 
-// ================= Cargar lista =================
+// ======================= Utilidades de ofertas / claves
+const makeKey = (nombre, superm, cant, und) =>
+  `${singular(nrm(nombre))}|${(superm||'').toLowerCase()}|${cant ?? ''}|${(und||'').toLowerCase()}`;
+
+// Si el ítem se guardó con el texto del datalist, lo normalizamos
+function parseNombreConEtiqueta(nombreCrudo) {
+  // Ej: "Aceite ... — 1000 ml (Mercadona) 4,65€"
+  const out = { base: nombreCrudo.trim(), cant: null, und: null };
+  const parts = nombreCrudo.split('—');
+  if (parts.length >= 2) {
+    const base = parts[0].trim();
+    const resto = parts.slice(1).join('—').trim(); // "1000 ml (Mercadona) 4,65€"
+    const pack = resto.split('(')[0].trim();       // "1000 ml"
+    const m = pack.match(/(\d+(?:[.,]\d+)?)\s*([a-zA-Z]+)/);
+    if (m) {
+      out.base = base;
+      out.cant = Number(String(m[1]).replace(',', '.'));
+      out.und  = m[2].toLowerCase();
+    }
+  }
+  return out;
+}
+
+// ======================= Cargar / renderizar lista
 async function cargarLista() {
   const { data: lista, error } = await supabase
-    .from('lista_compra')
-    .select('id, nombre, completado, cantidad, unidad, created_at')
-    .order('created_at', { ascending: true });
-  if (error) { container.innerHTML = '<p>Error cargando lista.</p>'; return; }
+  .from('lista_compra')
+  .select('id, nombre, completado, cantidad, unidad, created_at')
+  .order('completado', { ascending: true }) // primero los no completados
+  .order('created_at', { ascending: true }); // luego por fecha
+
+
+  if (error) {
+    container.innerHTML = '<p>Error cargando la lista.</p>';
+    return;
+  }
 
   if (!lista || lista.length === 0) {
     container.innerHTML = '<p>No hay ingredientes en la lista.</p>';
@@ -88,80 +175,81 @@ async function cargarLista() {
     return;
   }
 
+  // Ofertas (vista "ingredientes"): nombre (description), super, precio, pack
   const { data: ingredientes } = await supabase
-    .from('ingredientes_base')
-    .select('nombre, supermercado, precio, cantidad, unidad');
+    .from('ingredientes')
+    .select('description, supermercado, precio, cantidad, unidad, fecha_precio')
+    .order('fecha_precio', { ascending: false });
 
-  const mapaIngredientes = new Map();
-  const supermercadosUnicos = new Set();
-  const existentesSet = new Set((ingredientes || []).map(i => singular(nrm(i.nombre))));
+  // Mapa clave → precio (nos quedamos con el más reciente)
+  const ofertasMap = new Map();
+  const superSet = new Set();
 
-  (ingredientes || []).forEach(i => {
-    const key = singular(nrm(i.nombre));
-    if (i.supermercado) supermercadosUnicos.add(i.supermercado);
-    if (!mapaIngredientes.has(key)) mapaIngredientes.set(key, []);
-    mapaIngredientes.get(key).push(i);
+  (ingredientes || []).forEach(r => {
+    const key = makeKey(r.description || '', r.supermercado, r.cantidad, r.unidad);
+    if (!ofertasMap.has(key)) {
+      ofertasMap.set(key, Number(r.precio));
+    }
+    if (r.supermercado) superSet.add(r.supermercado);
   });
 
-  const prevSuper1 = supermercado1Select.value;
-  const prevSuper2 = supermercado2Select.value;
+  // Rellenar selects de supermercados (manteniendo selección)
+  const prev1 = supermercado1Select.value;
+  const prev2 = supermercado2Select.value;
   supermercado1Select.innerHTML = '<option value="">--Elige--</option>';
   supermercado2Select.innerHTML = '<option value="">--Elige--</option>';
-  [...supermercadosUnicos].sort().forEach(s => {
+  [...superSet].sort().forEach(s => {
     supermercado1Select.insertAdjacentHTML('beforeend', `<option value="${s}">${s}</option>`);
     supermercado2Select.insertAdjacentHTML('beforeend', `<option value="${s}">${s}</option>`);
   });
-  if (prevSuper1 && supermercadosUnicos.has(prevSuper1)) supermercado1Select.value = prevSuper1; else if (supermercadosUnicos.has('Lidl')) supermercado1Select.value = 'Lidl';
-  if (prevSuper2 && supermercadosUnicos.has(prevSuper2)) supermercado2Select.value = prevSuper2; else if (supermercadosUnicos.has('Mercadona')) supermercado2Select.value = 'Mercadona';
-  if (supermercado1Select.options.length === 1) { supermercado1Select.innerHTML += '<option value="Lidl">Lidl</option>'; supermercado1Select.value = 'Lidl'; }
-  if (supermercado2Select.options.length === 1) { supermercado2Select.innerHTML += '<option value="Mercadona">Mercadona</option>'; supermercado2Select.value = 'Mercadona'; }
+  if (prev1 && superSet.has(prev1)) supermercado1Select.value = prev1; else if (superSet.has('Lidl')) supermercado1Select.value = 'Lidl';
+  if (prev2 && superSet.has(prev2)) supermercado2Select.value = prev2; else if (superSet.has('Mercadona')) supermercado2Select.value = 'Mercadona';
 
-  const super1 = supermercado1Select.value || null;
-  const super2 = supermercado2Select.value || null;
-
-  const toBase = (cant, uni) => {
-    const n = Number(cant) || 0; const u = (uni || '').toLowerCase();
-    if (u === 'kg') return { c: n * 1000, u: 'g' };
-    if (u === 'g')  return { c: n,         u: 'g' };
-    if (u === 'l')  return { c: n * 1000,  u: 'ml' };
-    if (u === 'ml') return { c: n,         u: 'ml' };
-    return { c: n, u: 'ud' };
-  };
-
-  const completados = [], pendientes = [];
-  lista.forEach(it => (it.completado ? completados : pendientes).push(it));
-  const ordenados = [...pendientes, ...completados];
-
+  // Render
   let total1 = 0, total2 = 0;
   const ul = document.createElement('ul');
+  ul.className = 'lista-compra';
 
-  ordenados.forEach(item => {
-    const key = singular(nrm(item.nombre));
-    const coincidencias = mapaIngredientes.get(key) || [];
-    const prod1 = coincidencias.find(i => i.supermercado === super1) || null;
-    const prod2 = coincidencias.find(i => i.supermercado === super2) || null;
-    const ref = prod1 || prod2 || coincidencias[0] || null;
+  lista.forEach(item => {
+    // Nombre/cantidad para mostrar y para buscar ofertas
+    let baseName = item.nombre;
+    let cant = item.cantidad ?? null;
+    let und  = item.unidad   ?? null;
 
-    let packs = 1; let textoCantidad = '—';
-    if (ref && ref.cantidad && (item.cantidad || item.unidad)) {
-      const need = toBase(item.cantidad, item.unidad);
-      const pack = toBase(ref.cantidad, ref.unidad);
-      packs = pack.c > 0 ? Math.ceil(need.c / pack.c) : 1;
-      textoCantidad = `${item.cantidad ?? ref.cantidad} ${item.unidad ?? ref.unidad}`;
-      if (packs > 1) textoCantidad += ` · ≈${packs} pack${packs>1?'s':''}`;
-    } else if (ref && ref.cantidad) {
-      textoCantidad = `${ref.cantidad} ${ref.unidad}`;
+    // Si no hay pack guardado y el nombre viene con etiqueta de datalist, parsea
+    if (!cant || !und) {
+      const parsed = parseNombreConEtiqueta(item.nombre);
+      if (parsed.base) baseName = parsed.base;
+      if (parsed.cant) cant = parsed.cant;
+      if (parsed.und)  und  = parsed.und;
     }
 
-    const precio1 = prod1?.precio != null ? prod1.precio * packs : null;
-    const precio2 = prod2?.precio != null ? prod2.precio * packs : null;
-    if (precio1 != null) total1 += precio1;
-    if (precio2 != null) total2 += precio2;
+    // Precio por pack EXACTO del ítem (si lo tiene) y súper seleccionado
+    const key1 = makeKey(baseName, supermercado1Select.value, cant, und);
+    const key2 = makeKey(baseName, supermercado2Select.value, cant, und);
 
-    const esIngrediente = existentesSet.has(key);
-    const nombreClase = item.completado ? 'line-through text-gray-400' : (esIngrediente ? 'text-green-600 font-bold' : '');
-    const clase1 = (precio1 != null && precio2 != null && precio1 < precio2) ? 'text-green-600 font-bold' : '';
-    const clase2 = (precio1 != null && precio2 != null && precio2 < precio1) ? 'text-green-600 font-bold' : '';
+    let precio1 = ofertasMap.get(key1);
+    let precio2 = ofertasMap.get(key2);
+
+    // Fallback: si no hay pack, busca cualquier pack del nombre en ese súper
+    if ((precio1 == null) && (!cant || !und)) {
+      const pref = `${singular(nrm(baseName))}|${(supermercado1Select.value||'').toLowerCase()}|`;
+      const hit = [...ofertasMap.entries()].find(([k]) => k.startsWith(pref));
+      if (hit) precio1 = hit[1];
+    }
+    if ((precio2 == null) && (!cant || !und)) {
+      const pref = `${singular(nrm(baseName))}|${(supermercado2Select.value||'').toLowerCase()}|`;
+      const hit = [...ofertasMap.entries()].find(([k]) => k.startsWith(pref));
+      if (hit) precio2 = hit[1];
+    }
+
+    if (precio1 != null) total1 += Number(precio1) || 0;
+    if (precio2 != null) total2 += Number(precio2) || 0;
+
+    const nombreClase = item.completado ? 'tachado' : '';
+    const textoCantidad = (cant && und) ? `${cant} ${und}` : '—';
+    const clase1 = precio1 != null ? '' : 'precio-vacio';
+    const clase2 = precio2 != null ? '' : 'precio-vacio';
 
     ul.insertAdjacentHTML('beforeend', `
       <li class="lista-item">
@@ -169,13 +257,13 @@ async function cargarLista() {
           <div class="item-izquierda">
             <input type="checkbox" class="completado-checkbox" data-id="${item.id}" ${item.completado ? 'checked' : ''}>
             <div class="item-nombre-cantidad">
-              <span class="item-nombre ${nombreClase}">${item.nombre}</span>
+              <span class="item-nombre ${nombreClase}">${baseName}</span>
               <span class="item-cantidad">${textoCantidad}</span>
             </div>
           </div>
           <div class="item-derecha">
-            <span class="item-precio ${clase1}">${precio1 != null ? precio1.toFixed(2) + '€' : '—'}</span>
-            <span class="item-precio ${clase2}">${precio2 != null ? precio2.toFixed(2) + '€' : '—'}</span>
+            <span class="item-precio ${clase1}">${precio1 != null ? Number(precio1).toFixed(2) + '€' : '—'}</span>
+            <span class="item-precio ${clase2}">${precio2 != null ? Number(precio2).toFixed(2) + '€' : '—'}</span>
             <div class="lista-botones">
               <button class="boton-redondo boton-amarillo editar-btn" data-id="${item.id}" title="Editar"><i class="fas fa-edit"></i></button>
               <button class="boton-redondo boton-rojo borrar-btn" data-id="${item.id}" title="Borrar"><i class="fas fa-trash-alt"></i></button>
@@ -187,8 +275,8 @@ async function cargarLista() {
 
   container.innerHTML = '';
   container.appendChild(ul);
-  total1Span.textContent = total1.toFixed(2) + '€';
-  total2Span.textContent = total2.toFixed(2) + '€';
+  total1Span.textContent = (Number(total1).toFixed(2)) + '€';
+  total2Span.textContent = (Number(total2).toFixed(2)) + '€';
 
   document.querySelectorAll('.borrar-btn').forEach(btn => btn.addEventListener('click', borrarItem));
   document.querySelectorAll('.editar-btn').forEach(btn => btn.addEventListener('click', editarItem));
@@ -234,7 +322,8 @@ function editarItem(e) {
   form.querySelector('.cancelar-edicion').addEventListener('click', () => { li.classList.remove('editando'); cargarLista(); });
 }
 
-// =========== Agregar completados a despensa ==========
+// =========== Pasar completados a despensa ==========
+// =========== Pasar completados a despensa ==========
 document.getElementById('agregar-completados-despensa')?.addEventListener('click', async () => {
   const { data: completados } = await supabase
     .from('lista_compra')
@@ -244,29 +333,46 @@ document.getElementById('agregar-completados-despensa')?.addEventListener('click
   const uid = await getUidActual();
 
   for (const item of (completados || [])) {
+    // intenta recuperar cantidad/unidad desde ficha base como fallback
     const { data: info } = await supabase
       .from('ingredientes_base')
       .select('cantidad, unidad')
-      .eq('nombre', item.nombre)
+      .ilike('nombre', item.nombre)
       .maybeSingle();
 
-    const cant = info?.cantidad ?? 1;
-    const uni  = info?.unidad ?? 'ud';
+    const parsed = parseNombreConEtiqueta(item.nombre);
+    const cant = item.cantidad ?? parsed.cant ?? info?.cantidad ?? 1;
+    const uni  = item.unidad   ?? parsed.und  ?? info?.unidad   ?? 'ud';
+    const nombreFinal = parsed.base || item.nombre;
 
+    // Leer fila existente en despensa (trae cantidad y cantidad_total)
     const { data: existe } = await supabase
       .from('despensa')
-      .select('id, cantidad')
-      .eq('nombre', item.nombre)
+      .select('id, cantidad, cantidad_total, unidad')
+      .eq('nombre', nombreFinal)
       .eq('unidad', uni)
       .maybeSingle();
 
     if (existe) {
-      const nueva = (parseFloat(existe.cantidad) || 0) + (parseFloat(cant) || 0);
-      await supabase.from('despensa').update({ cantidad: nueva }).eq('id', existe.id);
+      // Sumamos a la cantidad actual y también al total "a tope"
+      const nuevaCantidad = (parseFloat(existe.cantidad) || 0) + (parseFloat(cant) || 0);
+      const nuevoTotal    = (parseFloat(existe.cantidad_total) || 0) + (parseFloat(cant) || 0);
+
+      await supabase.from('despensa')
+        .update({ cantidad: nuevaCantidad, cantidad_total: nuevoTotal })
+        .eq('id', existe.id);
     } else {
-      await supabase.from('despensa').insert([{ nombre: item.nombre, cantidad: cant, unidad: uni, owner_id: uid || null }]);
+      // Primera vez en despensa: cantidad y total valen lo comprado
+      await supabase.from('despensa').insert([{
+        nombre: nombreFinal,
+        cantidad: cant,
+        cantidad_total: cant,
+        unidad: uni,
+        owner_id: uid || null
+      }]);
     }
 
+    // Borrar de la lista de la compra
     await supabase.from('lista_compra').delete().eq('id', item.id);
   }
 
@@ -275,19 +381,19 @@ document.getElementById('agregar-completados-despensa')?.addEventListener('click
   window.updateShoppingBadge?.();
 });
 
-// =========== Pendientes (vista rápida) ==========
+
+// =========== Pendientes (mini vista)
 async function cargarPendientes() {
   const { data: pendientes } = await supabase
     .from('despensa')
     .select('*')
-    .order('created_at', { ascending: true });
 
   const cont = document.getElementById('pendientes-container');
   if (!cont) return;
   cont.innerHTML = pendientes?.length ? pendientes.map(p => `<div>${p.nombre}</div>`).join('') : '<p>No hay productos pendientes.</p>';
 }
 
-// =========== Init ==========
+// =========== Init
 window.addEventListener('DOMContentLoaded', () => {
   cargarLista();
   cargarPendientes();

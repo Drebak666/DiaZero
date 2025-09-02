@@ -1,100 +1,128 @@
+// ingredientes.js — v2 (base + precio/pack, sin duplicar base)
 import { supabase } from './supabaseClient.js';
-import { getUsuarioActivo } from './usuario.js';
-
 
 export async function guardarIngrediente() {
-  const nombre = document.getElementById('ingrediente-nombre').value.trim();
-  const supermercado = document.getElementById('ingrediente-supermercado').value;
-  const precio = parseFloat(document.getElementById('ingrediente-precio').value);
-  const cantidad = parseFloat(document.getElementById('ingrediente-cantidad').value);
-  const unidad = document.getElementById('ingrediente-unidad').value;
-  const calorias = parseFloat(document.getElementById('ingrediente-calorias').value);
-  const proteinas = parseFloat(document.getElementById('ingrediente-proteinas').value);
+  // --- Datos del formulario (ficha base) ---
+  const nombre      = document.getElementById('ingrediente-nombre').value.trim();
+  const baseCantRaw = document.getElementById('ingrediente-cantidad').value;
+  const baseUnidad  = (document.getElementById('ingrediente-unidad').value || '').trim();
 
-  if (!nombre || isNaN(precio) || isNaN(cantidad)) {
-    alert("Por favor, completa todos los campos obligatorios.");
+  // --- Precio en supermercado ---
+  const supermercado = (document.getElementById('ingrediente-supermercado').value || '').trim();
+  const precioRaw    = document.getElementById('ingrediente-precio').value;
+
+  // --- Nutrición (opcionales) ---
+  const calRaw = document.getElementById('ingrediente-calorias').value;
+  const protRaw= document.getElementById('ingrediente-proteinas').value;
+
+  // --- Pack opcional distinto al base (si pones estos inputs en el HTML) ---
+  // Si NO existen en el DOM, quedarán null y heredará del base.
+  const packCantDom = document.getElementById('pack-cantidad');
+  const packUndDom  = document.getElementById('pack-unidad');
+  const packCantRaw = packCantDom ? packCantDom.value : '';
+  const packUndRaw  = packUndDom  ? packUndDom.value  : '';
+
+  // Validación mínima
+  const baseCantidad = Number(baseCantRaw);
+  const precio       = Number(precioRaw);
+  if (!nombre || !supermercado || !Number.isFinite(baseCantidad) || !baseUnidad || !Number.isFinite(precio)) {
+    alert('Completa: nombre, supermercado, cantidad base, unidad base y precio.');
     return;
   }
 
-// obtener uid actual
-const { data: { user } } = await supabase.auth.getUser();
-const usuarioId = user?.id;
-if (!usuarioId) {
-  alert("No hay sesión activa. Inicia sesión primero.");
-  return;
+  // Login
+  const { data: { user } } = await supabase.auth.getUser();
+  const uid = user?.id;
+  if (!uid) {
+    alert('No hay sesión activa. Inicia sesión primero.');
+    return;
+  }
+
+  // Campos opcionales a null si están vacíos
+  const calorias  = Number.isFinite(Number(calRaw))  ? Number(calRaw)  : null;
+  const proteinas = Number.isFinite(Number(protRaw)) ? Number(protRaw) : null;
+
+  // Pack opcional
+  const packCantidad = Number.isFinite(Number(packCantRaw)) ? Number(packCantRaw) : null;
+  const packUnidad   = (packUndRaw || '').trim() || null;
+
+  try {
+    // 1) Buscar si ya existe ficha base (nombre + owner)
+    const { data: existing, error: selErr } = await supabase
+      .from('ingredientes_base')
+      .select('id')
+      .eq('owner_id', uid)
+      .ilike('nombre', nombre)        // comparación case-insensitive
+      .maybeSingle();
+
+    if (selErr) throw selErr;
+
+    let baseId = existing?.id;
+
+    // 2) Crear ficha base si no existe
+    if (!baseId) {
+      const { data: ins, error: insErr } = await supabase
+        .from('ingredientes_base')
+        .insert([{
+          nombre,
+          cantidad_base: baseCantidad, // si tu columna se llama 'cantidad', cambia aquí
+          unidad: baseUnidad,
+          calorias,
+          proteinas,
+          owner_id: uid
+        }])
+        .select('id')
+        .single();
+
+      if (insErr) throw insErr;
+      baseId = ins.id;
+    }
+
+    // 3) Crear registro de precio en supermercado (histórico o pack distinto)
+    //    - Si packCantidad/packUnidad son null ⇒ hereda cantidad_base/unidad del base
+    const { error: ismErr } = await supabase
+      .from('ingredientes_supermercado')
+      .insert([{
+        ingrediente_id: baseId,
+        supermercado,
+        precio,
+        cantidad: packCantidad ?? null,
+        unidad:   packUnidad   ?? null,
+        fecha_precio: new Date().toISOString()
+      }]);
+
+    if (ismErr) throw ismErr;
+
+    alert('Ingrediente guardado correctamente');
+    // Opcional: limpia el formulario
+    // document.getElementById('formulario-ingrediente').reset();
+  } catch (e) {
+    console.error('Error guardando ingrediente:', e);
+    alert('Error al guardar ingrediente');
+  }
 }
 
-const { error } = await supabase.from('ingredientes_base').insert([
-  {
-    nombre,
-    supermercado,
-    precio,
-    cantidad,
-    unidad,
-    calorias,
-    proteinas,
-owner_id: usuarioId,
-    fecha_creacion: new Date().toISOString()
-  }
-]);
-
-
-
-  if (error) {
-    alert("Error al guardar ingrediente");
-    console.error(error);
-  } else {
-    alert("Ingrediente guardado correctamente");
-  }
-}
-// Mostrar el formulario
+// Mostrar/ocultar formulario (sin cambios)
 document.getElementById('btn-ingrediente-actividad').addEventListener('click', () => {
   document.getElementById('formulario-ingrediente').classList.remove('oculto');
 });
-
-// Cancelar y ocultar el formulario
 document.getElementById('cancelar-ingrediente').addEventListener('click', (e) => {
   e.preventDefault();
   document.getElementById('formulario-ingrediente').classList.add('oculto');
 });
 
+// Listado simple de fichas base del usuario
 async function cargarIngredientes() {
   const { data: { user } } = await supabase.auth.getUser();
-  const usuarioId = user?.id;
-  if (!usuarioId) return;
+  const uid = user?.id;
+  if (!uid) return;
 
-  let data = null, error = null;
-
-  // 1º intento: ingredientes_base con created_at
-  try {
-    const res = await supabase
-      .from('ingredientes_base')
-      .select('id, nombre, cantidad, unidad, created_at, owner_id')
-      .eq('owner_id', usuarioId)
-      .order('created_at', { ascending: false });
-    data = res.data; error = res.error;
-  } catch (e) {}
-
-  // 2º intento (por si tu columna temporal se llama fecha_creacion)
-  if (error) {
-    try {
-      const res2 = await supabase
-        .from('ingredientes_base')
-        .select('id, nombre, cantidad, unidad, fecha_creacion, owner_id')
-        .eq('owner_id', usuarioId)
-        .order('fecha_creacion', { ascending: false });
-      data = res2.data; error = res2.error;
-    } catch (e) {}
-  }
-
-  // 3º fallback: sin ordenar si ambas columnas no existen
-  if (error) {
-    const res3 = await supabase
-      .from('ingredientes_base')
-      .select('id, nombre, cantidad, unidad, owner_id')
-      .eq('owner_id', usuarioId);
-    data = res3.data; error = res3.error;
-  }
+  // OJO: ajusta 'cantidad_base' ⇄ 'cantidad' según tu esquema real
+  const { data, error } = await supabase
+    .from('ingredientes_base')
+    .select('id, nombre, cantidad_base, unidad')
+    .eq('owner_id', uid)
+    .order('created_at', { ascending: false });
 
   if (error) {
     console.error('Error al cargar ingredientes (ingredientes_base):', error);
@@ -103,12 +131,12 @@ async function cargarIngredientes() {
 
   const contenedor = document.getElementById('lista-ingredientes');
   contenedor.innerHTML = '';
-
   (data || []).forEach((ing) => {
     const item = document.createElement('div');
-    item.textContent = `${ing.nombre} – ${ing.cantidad ?? ''} ${ing.unidad ?? ''}`.trim();
+    const cant = ing.cantidad_base ?? '';
+    const und  = ing.unidad ?? '';
+    item.textContent = `${ing.nombre} – ${cant} ${und}`.trim();
     contenedor.appendChild(item);
   });
 }
-
 document.addEventListener('DOMContentLoaded', cargarIngredientes);
