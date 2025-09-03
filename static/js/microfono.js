@@ -35,6 +35,88 @@ const SILENCE_MS = 1200; // tiempo sin voz para considerar que terminó la frase
   let finalText   = '';
   let lastShown   = ''; // anti-duplicados para onresult
 
+  // Detectores
+const hasWebSpeech = ('SpeechRecognition' in window) || ('webkitSpeechRecognition' in window);
+const isNative = !!(window.Capacitor?.isNativePlatform);
+
+// ===== WEB (navegador) =====
+function startWebSR(onText){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const sr = new SR();
+  sr.lang = 'es-ES';
+  sr.interimResults = false;
+  sr.maxAlternatives = 1;
+  sr.continuous = false;           // <- importante en Android
+  sr.onresult = (e) => {
+    const txt = e.results[0][0].transcript || '';
+    onText(txt);
+  };
+  sr.onerror = () => {};
+  sr.start();
+  return () => sr.abort();
+}
+
+// ===== NATIVO (Capacitor) =====
+async function startNativeSR(onText){
+  const { SpeechRecognition } = window.Capacitor.Plugins ?? {};
+  if (!SpeechRecognition) { alert('Plugin de voz no disponible'); return () => {}; }
+
+  await SpeechRecognition.requestPermission().catch(()=>{});
+  await SpeechRecognition.available();
+
+  const resHandler = ({ matches }) => {
+    const txt = (matches && matches[0]) || '';
+    onText(txt);
+    SpeechRecognition.stop(); // corta al primer resultado
+  };
+
+  const sub1 = await SpeechRecognition.addListener('result', resHandler);
+  const sub2 = await SpeechRecognition.addListener('partialResults', ()=>{}); // opcional
+
+  await SpeechRecognition.start({
+    language: 'es-ES',
+    popup: false,
+    partialResults: false,
+    maxResults: 1
+  });
+
+  // función para parar
+  return () => {
+    SpeechRecognition.stop();
+    sub1.remove(); sub2.remove?.();
+  };
+}
+
+// ===== API ÚNICA =====
+window.startVoice = async function(){
+  const onText = (txt) => {
+  const t = (txt || '').trim();
+  if (!t) return;
+
+  // pinta el texto reconocido
+  liveBox.textContent = t;
+
+  // tu flujo actual: parsear y enviar al iframe
+  const intent = parseIntent(t);
+  sendToIframe(intent);
+
+  // cerrar UI y parar
+  try { window.stopVoice?.(); } catch {}
+  closeModal();
+};
+
+
+  if (isNative && !hasWebSpeech) {
+    window.__stopVoice = await startNativeSR(onText);
+  } else {
+    window.__stopVoice = startWebSR(onText);
+  }
+};
+
+window.stopVoice = function(){
+  try { window.__stopVoice?.(); } catch {}
+};
+
   // Detecta móvil
   const IS_MOBILE = /Android|iPhone|iPad/i.test(navigator.userAgent);
 
@@ -147,15 +229,24 @@ const SILENCE_MS = 1200; // tiempo sin voz para considerar que terminó la frase
     const original = (transcript || '').trim();
 
     // 1) Comando al principio
-    const head = original.match(/^\s*(nota|tarea|rutina|cita|compra|comprar|lista(?:\s+de\s+la\s+compra)?)\b/i);
+const head = original.match(/^\s*(nota|tarea|rutina|cita|compra|comprar|lista(?:\s+de\s+la\s+compra)?|contacto|telefono|móvil|movil|llamar)\b/i);
     let type = 'nota';
     let payloadOriginal = original;
     if (head){
-      const key = head[1].toLowerCase();
-      if (key === 'compra' || key === 'comprar' || key.startsWith('lista')) type = 'compra';
-      else type = key;
-      payloadOriginal = original.slice(head[0].length);
-    }
+  const key = head[1].toLowerCase();
+  if (key === 'compra' || key === 'comprar' || key.startsWith('lista')) {
+    type = 'compra';
+  } else if (key === 'contacto' || key === 'telefono' || key === 'móvil' || key === 'movil') {
+    type = 'contacto';
+  } else if (key === 'llamar') {
+    type = 'llamar';
+  } else {
+    type = key;
+  }
+  payloadOriginal = original.slice(head[0].length);
+}
+
+
 
     if (type === 'compra'){
       const { cleaned } = parseDateTime(payloadOriginal);
@@ -335,10 +426,10 @@ const SILENCE_MS = 1200; // tiempo sin voz para considerar que terminó la frase
   }
 
   // ======== Eventos UI ========
-  micBtn?.addEventListener('click', () => {
-    openModal();
-    if (!escuchando) startListen(); else stopListen();
-  });
+micBtn?.addEventListener('click', async () => {
+  openModal();
+  await window.startVoice();  // usa nativo en Android, web en escritorio
+});
 
   btnClose?.addEventListener('click', () => { stopListen(); closeModal(); });
   modal?.addEventListener('click', (e)=>{ if (e.target === modal){ stopListen(); closeModal(); } });

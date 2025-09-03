@@ -1,0 +1,9 @@
+{
+  "appId": "com.tu.miagenda",
+  "appName": "MiAgenda",
+  "webDir": "www",
+  "server": {
+    "url": "https://excited-ivy-diazero2-97dc3db2.koyeb.app/",
+    "cleartext": true
+  }
+}

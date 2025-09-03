@@ -345,6 +345,7 @@
       <a class="icon-button" href="/calendario"><i class="fas fa-calendar-alt"></i><span>Calendario</span></a>
       <a class="icon-button" href="/ejercicio"><i class="fas fa-dumbbell"></i><span>Ejercicio</span></a>
       <a class="icon-button" href="/contactos" id="btn-contactos" title="Contactos">
+
   <i class="fas fa-address-book"></i><span>Contactos</span>
 </a>
 
@@ -782,8 +783,116 @@ async function refreshUIAfterChange(type, row) {
   let lastSig = null, lastTs = 0;
   const sameSig = (a,b) => a && b && a.type===b.type && a.text===b.text && a.date===b.date && a.time===b.time;
 
+// --- Helpers para números por voz y separar nombre/teléfono ---
+function _norm(s){ return (s||'').toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/[.,;:()\-_/+]/g,' ').replace(/\s+/g,' ').trim(); }
+
+const UNITS = {cero:'0',uno:'1',una:'1',un:'1',dos:'2',tres:'3',cuatro:'4',cinco:'5',seis:'6',siete:'7',ocho:'8',nueve:'9'};
+const TEENS = {diez:'10',once:'11',doce:'12',trece:'13',catorce:'14',quince:'15',
+               dieciseis:'16',diecisiete:'17',dieciocho:'18',diecinueve:'19'};
+const TENS  = {veinte:20,treinta:30,cuarenta:40,cincuenta:50,sesenta:60,setenta:70,ochenta:80,noventa:90};
+
+async function llamarPorVoz(payload){
+  const sb = (window.supabase || window.sb || window.supabaseClient);
+  const t = (payload || '').replace(/^\s*a\s+/i,'').trim(); // quita "a" inicial si dices "llamar a ..."
+
+  // 1) ¿Es un número dicho en palabras? → conviértelo
+  let num = (typeof palabrasANumero === 'function') ? palabrasANumero(t) : t.replace(/\s+/g,'');
+  // normaliza prefijo 34 → +34XXXXXXXXX (opcional)
+  if (/^34\d{9}$/.test(num)) num = '+' + num;
+
+  if (/^\+?\d{6,15}$/.test(num)) {
+    window.location.href = 'tel:' + num;
+    return;
+  }
+
+  // 2) Si no, busca por nombre en 'contactos'
+  if (!sb?.from) { alert('No hay conexión con Supabase'); return; }
+
+  const { data, error } = await sb
+    .from('contactos')
+    .select('id,nombre,telefono')
+    .ilike('nombre', t + '%')
+    .order('nombre', { ascending: true })
+    .limit(5);
+
+  if (error || !data?.length) { alert('No encuentro contacto: ' + t); return; }
+
+  const conTel = data.filter(c => c.telefono);
+  if (!conTel.length) { alert('Ese contacto no tiene teléfono guardado.'); return; }
+
+  const elegido = conTel[0]; // el primero que coincida
+  window.location.href = 'tel:' + String(elegido.telefono).trim();
+}
+
+// Convierte "seis doce treinta y cuatro..." en "61234"
+function palabrasANumero(str){
+  const t = _norm(str).split(' ');
+  let out = '';
+  for (let i=0;i<t.length;i++){
+    const w = t[i];
+    if (/^\d+$/.test(w)) { out += w; continue; }                  // ya dígitos
+    if (UNITS[w])        { out += UNITS[w]; continue; }           // 0–9
+    if (TEENS[w])        { out += TEENS[w]; continue; }           // 10–19
+    if (w.startsWith('veinti')) {                                 // veintiuno...
+      const u = w.replace(/^veinti/,''); if (UNITS[u]) out += '2'+UNITS[u];
+      continue;
+    }
+    if (TENS[w]){                                                 // treinta (y) dos
+      if (t[i+1]==='y' && UNITS[t[i+2]]) { out += String(TENS[w]+Number(UNITS[t[i+2]])); i+=2; }
+      else { out += String(TENS[w]); }
+      continue;
+    }
+    // ignora conectores
+    if (['y','guion','gion','numero','número','mas','plus','slash','barra','espacio'].includes(w)) continue;
+  }
+  // Limpia espacios residuales
+  return out.replace(/\s+/g,'');
+}
+
+const NUMBER_WORDS = new Set([
+  ...Object.keys(UNITS), ...Object.keys(TEENS), ...Object.keys(TENS),
+  'veintiuno','veintidos','veintitres','veinticuatro','veinticinco','veintiseis','veintisiete','veintiocho','veintinueve',
+  'y','guion','gion','numero','número','mas','plus','slash','barra','espacio'
+]);
+
+// Separa “Ana María seis doce…” -> { nombre:"Ana María", numeroTexto:"seis doce…" }
+function splitNombreTelefono(text){
+  const raw = text.trim();
+  const normalized = _norm(raw).split(' ');
+  let idx = normalized.findIndex(tok => /^\d+$/.test(tok) || NUMBER_WORDS.has(tok) || tok.startsWith('veinti'));
+  if (idx === -1) return { nombre: raw, numeroTexto: '' };
+  // reconstruye nombre usando las palabras originales para mantener mayúsculas
+  const origParts = raw.split(/\s+/);
+  const nombre = origParts.slice(0, idx).join(' ') || 'SinNombre';
+  const numeroTexto = origParts.slice(idx).join(' ');
+  return { nombre, numeroTexto };
+}
+
+
+
   async function crearEntidad(intent){
     const { type, text, date, time } = intent;
+        // CONTACTO -> 'contactos'
+    if (type === 'contacto') {
+  const { nombre, numeroTexto } = splitNombreTelefono(text);
+  const telefono = palabrasANumero(numeroTexto);
+  const r = await insertIfNotExists({
+    table: 'contactos',
+    build: (owner_id) => ({ nombre, telefono, owner_id }),
+    match: (row) => ({ nombre: row.nombre, telefono: row.telefono, owner_id: row.owner_id })
+  });
+  if (r?.ok) refreshUIAfterChange('contacto', r.row);
+  return;
+  
+}
+
+if (type === 'llamar') {
+  await llamarPorVoz(text);
+  return;
+}
+
     if (!text) throw new Error('Sin texto');
 
     // Si tu app ya tiene helpers, se respetan
@@ -1012,6 +1121,59 @@ rows.forEach(r => { r.owner_id = owner_id; r.completado = false; });
   });
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const qs = new URLSearchParams(location.search);
+  const listenFlag = qs.get('listen') === '1' || location.hash.includes('listen');
+  const isNative = !!(window.Capacitor?.isNativePlatform);
+
+  if (listenFlag || isNative) {
+    try { await window.startVoice?.(); } catch (e) {}
+  }
+});
+</script>
+
+
+<!-- Botón flotante -->
+<button id="mini-mic" style="position:fixed;right:16px;bottom:16px;z-index:9999;
+  width:56px;height:56px;border-radius:50%;border:none;background:#0ea5e9;color:white;">
+  <i class="fa fa-microphone"></i>
+</button>
+
+<!-- Modal de voz -->
+<div id="voice-modal" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:10000;">
+  <div style="background:#0f172a;color:#e5e7eb;padding:16px 18px;border-radius:12px;min-width:280px;max-width:90vw;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <strong>Voz</strong>
+      <span style="font-size:12px;opacity:.8;">(habla y suelta)</span>
+      <div style="flex:1"></div>
+      <button id="voice-close" style="background:#334155;color:#fff;border:none;padding:6px 10px;border-radius:8px;">Cerrar</button>
+    </div>
+    <div id="voice-live" style="min-height:48px;padding:10px;background:#111827;border:1px solid #1f2937;border-radius:8px;">
+      Escuchando…
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button id="voice-copy"   style="flex:1;background:#1f2937;color:#e5e7eb;border:none;padding:8px;border-radius:8px;">Copiar</button>
+      <button id="voice-paste"  style="flex:1;background:#1f2937;color:#e5e7eb;border:none;padding:8px;border-radius:8px;">Pegar en la app</button>
+      <button id="voice-create" style="flex:1;background:#10b981;color:#0b1324;border:none;padding:8px;border-radius:8px;">Crear según comando</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // helpers abrir/cerrar (los usa microfono.js)
+  (function(){
+    const modal = document.getElementById('voice-modal');
+    window.openModal  = () => { modal.style.display='flex'; modal.setAttribute('aria-hidden','false'); };
+    window.closeModal = () => { modal.style.display='none'; modal.setAttribute('aria-hidden','true'); };
+  })();
+</script>
+
+<!-- (si usas iframe para la app web) -->
+<!-- <iframe id="app-frame" src="/" style="display:none"></iframe> -->
+
+<!-- Carga del micro -->
+<script src="/static/js/microfono.js"></script>
 
 </body>
 </html>
