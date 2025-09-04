@@ -2,58 +2,73 @@
 <meta charset="utf-8">
 <title>Dictado</title>
 <style>
-  body { font-family: system-ui, sans-serif; padding:16px; }
-  #live { font-size:1.25rem; color:#333; margin:8px 0 16px; }
-  button { padding:10px 14px; border:0; border-radius:8px; margin-right:8px; }
-  #send { background:#2563eb; color:#fff; }
-  #stop { background:#e11d48; color:#fff; }
-  #status { color:#666; font-size:.9rem; }
+  html,body{height:100%;margin:0}
+  body { font-family: system-ui, sans-serif; padding:24px; display:flex; flex-direction:column; gap:16px; }
+  #live { flex:1; font-size:1.25rem; color:#111; border:1px solid #ddd; padding:12px; border-radius:8px; }
+  #status { color:#444; font-size:.95rem; }
+  #send {
+    display:block; width:100%; padding:16px; font-size:1.15rem;
+    border:0; border-radius:12px; color:#fff; background:#2563eb;
+  }
+  #stop {
+    display:block; width:100%; padding:12px; font-size:1rem;
+    border:0; border-radius:12px; color:#fff; background:#e11d48;
+  }
 </style>
-<h3>Hablando…</h3>
-<p id="live">…</p>
-<p id="status"></p>
-<p>
-  <button id="send">Enviar</button>
-  <button id="stop">Detener</button>
-</p>
+
+<h2>Dicta tu nota</h2>
+<div id="live" aria-live="polite">…</div>
+<div id="status"></div>
+<button id="send">ENVIAR A LA APP</button>
+<button id="stop">DETENER</button>
 
 <script>
 const SR   = window.SpeechRecognition || window.webkitSpeechRecognition;
-const q    = new URLSearchParams(location.search);
-const lang = q.get('lang')   || 'es-ES';
-const ret  = q.get('return') || 'miagenda://dict';
+const qp   = new URLSearchParams(location.search);
+const lang = qp.get('lang')   || 'es-ES';
+const ret  = qp.get('return') || 'miagenda://dict';
 const live = document.getElementById('live');
 const stat = document.getElementById('status');
 const btnOk= document.getElementById('send');
 const btnSt= document.getElementById('stop');
 
 let last = '';
-function send(text){ location.href = ret + '?text=' + encodeURIComponent(text || ''); }
+
+function send(text){
+  location.href = ret + '?text=' + encodeURIComponent(text || '');
+}
 function setStatus(s){ stat.textContent = s || ''; }
 
-// Auto-envío tras silencio si ya hay texto
-let silenceTimer = null;
-function armSilence(){
-  clearTimeout(silenceTimer);
-  silenceTimer = setTimeout(()=>{ if (last && last.trim()) send(last); }, 2500);
-}
-
 btnOk.addEventListener('click', () => send(last));
-btnSt.addEventListener('click', () => { try{ r && r.stop && r.stop(); }catch{} setStatus('Detenido. Pulsa “Enviar” para salir.'); });
+btnSt.addEventListener('click', () => {
+  try { r && r.stop && r.stop(); } catch {}
+  setStatus('Detenido. Puedes editar y pulsar ENVIAR.');
+});
 
 if (!SR) {
-  setStatus('Este navegador no soporta dictado. Pulsa “Enviar” si ya hay texto.');
+  setStatus('Este navegador no soporta dictado. Escribe y pulsa ENVIAR.');
 } else {
   const r = new SR();
-  r.lang = lang; r.interimResults = true; r.maxAlternatives = 1; r.continuous = false;
+  r.lang = lang;
+  r.interimResults = true;
+  r.maxAlternatives = 1;
+  r.continuous = false;
+
   r.onresult = (e) => {
     const i = e.results.length - 1;
-    last = e.results[i]?.[0]?.transcript || last;
-    live.textContent = last;
-    setStatus('Escuchando…'); armSilence();
+    const frag = e.results[i]?.[0]?.transcript || '';
+    if (frag) {
+      last = (last ? last + ' ' : '') + frag;
+      live.textContent = last;
+      setStatus('Escuchando…');
+    }
   };
-  r.onerror = () => setStatus('Error en dictado. Puedes pulsar “Enviar”.');
-  r.onend   = () => { if (last && last.trim()) send(last); else setStatus('Finalizado. Pulsa “Enviar”.'); };
-  window.addEventListener('load', () => { try { r.start(); setStatus('Escuchando…'); } catch { setStatus('No se pudo iniciar. Pulsa “Enviar”.'); } });
+  r.onerror = (e) => setStatus('Error: ' + (e?.error || e?.message || 'desconocido'));
+  r.onend   = () => setStatus('Finalizado. Revisa y pulsa ENVIAR.');
+
+  window.addEventListener('load', () => {
+    try { r.start(); setStatus('Escuchando…'); } 
+    catch { setStatus('No se pudo iniciar. Escribe y pulsa ENVIAR.'); }
+  });
 }
 </script>
