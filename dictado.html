@@ -1,73 +1,82 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Dictado</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   html,body{height:100%;margin:0}
-  body { font-family: system-ui, sans-serif; padding:24px; display:flex; flex-direction:column; gap:16px; }
-  #live { flex:1; font-size:1.25rem; color:#111; border:1px solid #ddd; padding:12px; border-radius:8px; }
-  #status { color:#444; font-size:.95rem; }
-  #send {
-    display:block; width:100%; padding:16px; font-size:1.15rem;
-    border:0; border-radius:12px; color:#fff; background:#2563eb;
-  }
-  #stop {
-    display:block; width:100%; padding:12px; font-size:1rem;
-    border:0; border-radius:12px; color:#fff; background:#e11d48;
-  }
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;padding:24px;display:flex;flex-direction:column;gap:16px}
+  h2{margin:0 0 8px}
+  #live{flex:1;font-size:1.15rem;color:#111;border:1px solid #ddd;border-radius:12px;padding:12px;min-height:140px}
+  #status{color:#444;font-size:.95rem}
+  .row{display:flex;gap:10px}
+  button{flex:1;padding:14px 16px;font-size:1.05rem;border:0;border-radius:12px}
+  #send{background:#2563eb;color:#fff}
+  #stop{background:#e11d48;color:#fff}
 </style>
 
 <h2>Dicta tu nota</h2>
 <div id="live" aria-live="polite">…</div>
 <div id="status"></div>
-<button id="send">ENVIAR A LA APP</button>
-<button id="stop">DETENER</button>
+<div class="row">
+  <button id="send">ENVIAR A LA APP</button>
+  <button id="stop">DETENER</button>
+</div>
 
 <script>
 const SR   = window.SpeechRecognition || window.webkitSpeechRecognition;
-const qp   = new URLSearchParams(location.search);
-const lang = qp.get('lang')   || 'es-ES';
-const ret  = qp.get('return') || 'miagenda://dict';
+const qs   = new URLSearchParams(location.search);
+const lang = qs.get('lang')   || 'es-ES';
+const ret  = qs.get('return') || 'miagenda://dict';
 const live = document.getElementById('live');
 const stat = document.getElementById('status');
-const btnOk= document.getElementById('send');
-const btnSt= document.getElementById('stop');
+const btnSend = document.getElementById('send');
+const btnStop = document.getElementById('stop');
 
-let last = '';
+let textBuf = '';
 
-function send(text){
-  location.href = ret + '?text=' + encodeURIComponent(text || '');
-}
 function setStatus(s){ stat.textContent = s || ''; }
 
-btnOk.addEventListener('click', () => send(last));
-btnSt.addEventListener('click', () => {
-  try { r && r.stop && r.stop(); } catch {}
-  setStatus('Detenido. Puedes editar y pulsar ENVIAR.');
-});
+async function send(text){
+  const t = (text || textBuf || '').trim();
+  try {
+    // 1) Pasa el texto al portapapeles del sistema (requiere gesto de usuario: el botón)
+    await navigator.clipboard.writeText(t);
+  } catch(e) {
+    // si no pudiera, seguimos igual con deep-link; la app también acepta ?text=
+  }
+  // 2) Vuelve a la app indicando que use el portapapeles
+  const url = t ? (ret + '?clip=1') : (ret);
+  location.href = url;
+}
 
+btnSend.addEventListener('click', () => send(textBuf));
+btnStop.addEventListener('click', () => { try { rec && rec.stop(); } catch{} setStatus('Detenido. Revisa y pulsa ENVIAR.'); });
+
+let rec = null;
 if (!SR) {
-  setStatus('Este navegador no soporta dictado. Escribe y pulsa ENVIAR.');
+  setStatus('Este navegador no soporta dictado. Escribe aquí y pulsa ENVIAR.');
+  live.contentEditable = 'true';
+  live.addEventListener('input', ()=> { textBuf = live.textContent || ''; });
 } else {
-  const r = new SR();
-  r.lang = lang;
-  r.interimResults = true;
-  r.maxAlternatives = 1;
-  r.continuous = false;
+  rec = new SR();
+  rec.lang = lang;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+  rec.continuous = false; // una frase; luego puedes pulsar ENVIAR o dictar otra vez si recarga
 
-  r.onresult = (e) => {
+  rec.onresult = (e) => {
     const i = e.results.length - 1;
     const frag = e.results[i]?.[0]?.transcript || '';
     if (frag) {
-      last = (last ? last + ' ' : '') + frag;
-      live.textContent = last;
+      textBuf = (textBuf ? textBuf + ' ' : '') + frag;
+      live.textContent = textBuf;
       setStatus('Escuchando…');
     }
   };
-  r.onerror = (e) => setStatus('Error: ' + (e?.error || e?.message || 'desconocido'));
-  r.onend   = () => setStatus('Finalizado. Revisa y pulsa ENVIAR.');
-
+  rec.onerror = (e) => setStatus('Error: ' + (e?.error || e?.message || 'desconocido'));
+  rec.onend   = () => setStatus('Finalizado. Revisa y pulsa ENVIAR.');
   window.addEventListener('load', () => {
-    try { r.start(); setStatus('Escuchando…'); } 
+    try { rec.start(); setStatus('Escuchando…'); }
     catch { setStatus('No se pudo iniciar. Escribe y pulsa ENVIAR.'); }
   });
 }
