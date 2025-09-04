@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Dictado</title>
+<script>
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const q  = new URLSearchParams(location.search);
+const lang = q.get('lang') || 'es-ES';
+const ret  = q.get('return') || 'miagenda://dict';
+
+function done(text) {
+  location.href = ret + '?text=' + encodeURIComponent(text || '');
+}
+
+if (!SR) done('Navegador sin soporte de dictado');
+
+const r = new SR();
+r.lang = lang;
+r.interimResults = true;
+r.maxAlternatives = 1;
+let last = '';
+
+r.onresult = (e) => {
+  const i = e.results.length - 1;
+  last = e.results[i][0].transcript || last;
+  document.getElementById('live').textContent = last;
+};
+r.onerror = () => done('(error en dictado)');
+r.onend   = () => done(last);
+
+window.onload = () => r.start();
+</script>
+<body style="font-family:system-ui, sans-serif; padding:16px">
+  <h3>Hablando…</h3>
+  <p id="live" style="font-size:1.25rem; color:#333">…</p>
+  <p>Al terminar volverás a la app.</p>
+</body>
